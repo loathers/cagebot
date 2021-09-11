@@ -140,15 +140,6 @@ export class KoLClient {
     await this.useChatMacro(`/w ${recipient.id} ${message}`);
   }
 
-  async addToPrivateMessageQueue(recipient: KoLUser, message: string): Promise<void> {
-    this._messageQueue.push({ who: recipient, msg: message });
-  }
-
-  async sendNextMessage(): Promise<void> {
-    const nextMessage = this._messageQueue.shift();
-    if (nextMessage) await this.sendPrivateMessage(nextMessage.who, nextMessage.msg);
-  }
-
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
     const newChatMessagesResponse = await this.visitUrl("newchatmessages.php", {
       j: 1,
@@ -161,7 +152,7 @@ export class KoLClient {
         who: msg.who,
         msg: msg.msg,
       }));
-    newWhispers.forEach(({ who }) => this.addToPrivateMessageQueue(who, "Message acknowledged."));
+    newWhispers.forEach(({ who }) => this.sendPrivateMessage(who, "Message acknowledged."));
     return newWhispers;
   }
 

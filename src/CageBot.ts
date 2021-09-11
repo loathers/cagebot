@@ -27,7 +27,6 @@ export class CageBot {
         async () => this._privateMessages.push(...(await this._client.fetchNewWhispers())),
         3000
       );
-      setInterval(async () => this._client.sendNextMessage(), 500);
       this.processMessage();
     });
   }
@@ -97,7 +96,7 @@ export class CageBot {
       );
       if (whitelists.length > 1) {
         console.log(`Clan name "${clanName}" ambiguous, aborting.`);
-        this._client.addToPrivateMessageQueue(
+        this._client.sendPrivateMessage(
           message.who,
           `I'm in multiple clans named ${clanName}: ${whitelists.join(
             ", "
@@ -105,7 +104,7 @@ export class CageBot {
         );
       } else if (whitelists.length < 1) {
         console.log(`Clan name "${clanName}" does not match any whitelists, aborting.`);
-        this._client.addToPrivateMessageQueue(
+        this._client.sendPrivateMessage(
           message.who,
           `I'm not in any clans named ${clanName}. Check your spelling, or ensure I have a whitelist.`
         );
@@ -117,14 +116,14 @@ export class CageBot {
         await this._client.joinClan(targetClan);
         if ((await this._client.myClan()) !== targetClan.id) {
           console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
-          await this._client.addToPrivateMessageQueue(
+          await this._client.sendPrivateMessage(
             message.who,
             `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
           );
         } else {
           if (!/Old Sewers/.test(await this._client.visitUrl("clan_hobopolis.php"))) {
             console.log(`Sewers in clan "${targetClan.name}" inaccessible, aborting.`);
-            await this._client.addToPrivateMessageQueue(
+            await this._client.sendPrivateMessage(
               message.who,
               `I can't seem to access the sewers in ${targetClan.name}. Is Hobopolis open? Do I have the right permissions?`
             );
@@ -132,7 +131,7 @@ export class CageBot {
             let grates = 0;
             let valves = 0;
             const startAdv = await this._client.getAdvs();
-            await this._client.addToPrivateMessageQueue(
+            await this._client.sendPrivateMessage(
               message.who,
               `Attempting to get caged in ${targetClan.name}.`
             );
@@ -182,7 +181,7 @@ export class CageBot {
                 cagedAt: Date.now(),
               };
               console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
-              await this._client.addToPrivateMessageQueue(
+              await this._client.sendPrivateMessage(
                 message.who,
                 `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
               );
@@ -190,7 +189,7 @@ export class CageBot {
               console.log(
                 `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
               );
-              await this._client.addToPrivateMessageQueue(
+              await this._client.sendPrivateMessage(
                 message.who,
                 `I ran out of adventures trying to get caged in ${targetClan.name}.`
               );
@@ -198,14 +197,14 @@ export class CageBot {
               console.log(
                 `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
               );
-              await this._client.addToPrivateMessageQueue(
+              await this._client.sendPrivateMessage(
                 message.who,
                 `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
               );
             }
             const endAdvs = await this._client.getAdvs();
             const spentAdvs = startAdv - endAdvs;
-            await this._client.addToPrivateMessageQueue(
+            await this._client.sendPrivateMessage(
               message.who,
               `I opened ${grates} grate${grates === 1 ? "" : "s"} and turned ${valves} valve${
                 valves === 1 ? "" : "s"
@@ -228,7 +227,7 @@ export class CageBot {
     } else {
       await this.chewOut();
       console.log(`Successfully chewed out of cage. Reporting success.`);
-      await this._client.addToPrivateMessageQueue(message.who, "Chewed out! I am now uncaged.");
+      await this._client.sendPrivateMessage(message.who, "Chewed out! I am now uncaged.");
     }
   }
 
@@ -245,12 +244,12 @@ export class CageBot {
       const prevStatus = this._cageStatus;
       await this.chewOut();
       console.log(`Successfully chewed out of cage. Reporting success.`);
-      await this._client.addToPrivateMessageQueue(message.who, "Chewed out! I am now uncaged.");
+      await this._client.sendPrivateMessage(message.who, "Chewed out! I am now uncaged.");
       if (prevStatus && prevStatus.requester.id !== message.who.id) {
         console.log(
           `Reporting release to original requester ${prevStatus.requester.name} (#${prevStatus.requester.id}).`
         );
-        await this._client.addToPrivateMessageQueue(
+        await this._client.sendPrivateMessage(
           prevStatus.requester,
           `I chewed out of the Hobopolis instance in ${prevStatus.clan} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`
         );
@@ -260,27 +259,27 @@ export class CageBot {
 
   async helpText(message: PrivateMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) requested help.`);
-    await this._client.addToPrivateMessageQueue(
+    await this._client.sendPrivateMessage(
       message.who,
       `Hi! I am ${this._client.getMe()?.name} (#${
         this._client.getMe()?.id
       }), and I am running Phillammon's Cagebot script.`
     );
-    await this._client.addToPrivateMessageQueue(message.who, `My commands:`);
-    await this._client.addToPrivateMessageQueue(message.who, `- status: Get my current status`);
-    await this._client.addToPrivateMessageQueue(
+    await this._client.sendPrivateMessage(message.who, `My commands:`);
+    await this._client.sendPrivateMessage(message.who, `- status: Get my current status`);
+    await this._client.sendPrivateMessage(
       message.who,
       `- cage [clanname]: Try to get caged in the specified clan's hobopolis instance`
     );
-    await this._client.addToPrivateMessageQueue(
+    await this._client.sendPrivateMessage(
       message.who,
       `- escape: If you're the person who requested I got caged, chews out of the cage I'm in`
     );
-    await this._client.addToPrivateMessageQueue(
+    await this._client.sendPrivateMessage(
       message.who,
       `- release: Chew out of the cage, REGARDLESS of who is responsible for the caging. Only usable if I've been caged for an hour or something's gone wrong.`
     );
-    await this._client.addToPrivateMessageQueue(message.who, `- help: Displays this message.`);
+    await this._client.sendPrivateMessage(message.who, `- help: Displays this message.`);
   }
 
   async statusReport(message: PrivateMessage, directlyRequested: boolean = false): Promise<void> {
@@ -289,7 +288,7 @@ export class CageBot {
     if (this._amCaged) {
       if (this._cageStatus) {
         const cageSecs = this.secondsInCage();
-        await this._client.addToPrivateMessageQueue(
+        await this._client.sendPrivateMessage(
           message.who,
           `I have been caged in ${this._cageStatus.clan} for ${this.humanReadableTime(
             cageSecs
@@ -298,12 +297,12 @@ export class CageBot {
           }).`
         );
         if (this.releaseable()) {
-          await this._client.addToPrivateMessageQueue(
+          await this._client.sendPrivateMessage(
             message.who,
             `As I've been caged for at least an hour, anyone can release me by whispering "release" to me. I have ${await this._client.getAdvs()} adventures left.`
           );
         } else {
-          await this._client.addToPrivateMessageQueue(
+          await this._client.sendPrivateMessage(
             message.who,
             `They can release me at any time by whispering "escape" to me, or anyone can release me by whispering "release" to me in ${this.humanReadableTime(
               3600 - cageSecs
@@ -311,13 +310,13 @@ export class CageBot {
           );
         }
       } else {
-        await this._client.addToPrivateMessageQueue(
+        await this._client.sendPrivateMessage(
           message.who,
           `I am caged, but I don't know where, when, or for how long. Anyone can release me by whispering "release" to me. I have ${await this._client.getAdvs()} adventures left.`
         );
       }
     } else {
-      await this._client.addToPrivateMessageQueue(
+      await this._client.sendPrivateMessage(
         message.who,
         `I am not presently caged and have ${await this._client.getAdvs()} adventures left.`
       );
@@ -326,7 +325,7 @@ export class CageBot {
 
   async didntUnderstand(message: PrivateMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) made an incomprehensible request.`);
-    await this._client.addToPrivateMessageQueue(
+    await this._client.sendPrivateMessage(
       message.who,
       `I'm afraid I didn't understand that. Whisper me "help" for details of how to use me.`
     );
