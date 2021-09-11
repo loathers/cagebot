@@ -27,10 +27,7 @@ export class CageBot {
         async () => this._privateMessages.push(...(await this._client.fetchNewWhispers())),
         3000
       );
-      setInterval(
-        async () => this._client.sendNextMessage(),
-        500
-      );
+      setInterval(async () => this._client.sendNextMessage(), 500);
       this.processMessage();
     });
   }

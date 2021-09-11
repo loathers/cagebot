@@ -1,6 +1,12 @@
 import axios from "axios";
 import { select } from "xpath";
 import { DOMParser as dom } from "xmldom";
+import { Agent as httpsAgent } from "https";
+import { Agent as httpAgent } from "http";
+
+axios.defaults.timeout = 30000;
+axios.defaults.httpAgent = new httpAgent({ keepAlive: true });
+axios.defaults.httpsAgent = new httpsAgent({ keepAlive: true });
 
 const parser = new dom({
   errorHandler: {
@@ -135,12 +141,12 @@ export class KoLClient {
   }
 
   async addToPrivateMessageQueue(recipient: KoLUser, message: string): Promise<void> {
-    this._messageQueue.push({who: recipient, msg: message});
+    this._messageQueue.push({ who: recipient, msg: message });
   }
 
   async sendNextMessage(): Promise<void> {
-    const nextMessage = this._messageQueue.shift()
-    if (nextMessage) await this.sendPrivateMessage(nextMessage.who, nextMessage.msg)
+    const nextMessage = this._messageQueue.shift();
+    if (nextMessage) await this.sendPrivateMessage(nextMessage.who, nextMessage.msg);
   }
 
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
