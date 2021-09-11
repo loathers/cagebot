@@ -43,6 +43,7 @@ export class KoLClient {
   private _credentials?: KOLCredentials;
   private _lastFetchedMessages: string = "0";
   private _player?: KoLUser;
+  private _messageQueue: PrivateMessage[] = [];
 
   constructor(username: string, password: string) {
     this._loginParameters = new URLSearchParams();
@@ -129,8 +130,17 @@ export class KoLClient {
     });
   }
 
-  async sendPrivateMessage(recipient: string, message: string): Promise<void> {
-    await this.useChatMacro(`/w ${recipient} ${message}`);
+  async sendPrivateMessage(recipient: KoLUser, message: string): Promise<void> {
+    await this.useChatMacro(`/w ${recipient.id} ${message}`);
+  }
+
+  async addToPrivateMessageQueue(recipient: KoLUser, message: string): Promise<void> {
+    this._messageQueue.push({who: recipient, msg: message});
+  }
+
+  async sendNextMessage(): Promise<void> {
+    const nextMessage = this._messageQueue.shift()
+    if (nextMessage) await this.sendPrivateMessage(nextMessage.who, nextMessage.msg)
   }
 
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
@@ -145,7 +155,7 @@ export class KoLClient {
         who: msg.who,
         msg: msg.msg,
       }));
-    newWhispers.forEach(({ who }) => this.sendPrivateMessage(who.id, "Message acknowledged."));
+    newWhispers.forEach(({ who }) => this.addToPrivateMessageQueue(who, "Message acknowledged."));
     return newWhispers;
   }
 
