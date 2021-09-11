@@ -8,13 +8,16 @@
     "clean": "tsc --build --clean",
     "start": "node ./dist/index.js"
   },
-  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Phillammon/Cagebot.git"
+  },
+  "author": "Alistair 'Phillammon' Crook",
   "license": "ISC",
   "dependencies": {
     "async-mutex": "^0.3.2",
     "axios": "^0.21.1",
     "dotenv": "^10.0.0",
-    "html-entities": "^2.3.2",
     "xmldom": "^0.6.0",
     "xpath": "^0.0.32"
   },
