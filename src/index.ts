@@ -27,7 +27,7 @@ console.log();
 console.log();
 console.log("INGAME SETUP");
 console.log("  To set up your multi, please have it idle with as much +adv rollover gear");
-console.log("  on as possible, amd at least 1 hp regen/fight. Whatsian Ionic Pliers in");
+console.log("  on as possible, and at least 1 hp regen/fight. Whatsian Ionic Pliers in");
 console.log("  the offhand are recommended as a cheap and plentiful option for this.");
 console.log();
 console.log("  You will also require an autoattack with the name CAGEBOT (all caps) that");
