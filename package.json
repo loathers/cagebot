@@ -1,5 +1,5 @@
 {
-  "name": "cagesitter",
+  "name": "cagebot",
   "version": "1.0.0",
   "description": "A KoL Chatbot for sitting in cages.",
   "main": "./dist/index.js",
