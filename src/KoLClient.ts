@@ -136,18 +136,22 @@ export class KoLClient {
     pwd: Boolean = true
   ): Promise<any> {
     if (this._isRollover || !await this.logIn()) return null;
-    const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
-      method: "POST",
-      withCredentials: true,
-      headers: {
-        cookie: this._credentials?.sessionCookies || "",
-      },
-      params: {
-        ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
-        ...parameters,
-      },
-    });
-    return page.data;
+    try {
+      const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
+        method: "POST",
+        withCredentials: true,
+        headers: {
+          cookie: this._credentials?.sessionCookies || "",
+        },
+        params: {
+          ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
+          ...parameters,
+        },
+      });
+      return page.data;
+    } catch {
+      return null;
+    }
   }
 
   async useChatMacro(macro: string): Promise<void> {
