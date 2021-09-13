@@ -62,35 +62,40 @@ export class KoLClient {
 
   async loggedIn(): Promise<boolean> {
     if (!this._credentials) return false;
-    const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
-      maxRedirects: 0,
-      withCredentials: true,
-      headers: {
-        cookie: this._credentials?.sessionCookies || "",
-      },
-      params: {
-        what: "status",
-        for: "Cagesitter (Maintained by Phillammon)",
-      },
-      validateStatus: (status) => status === 302 || status === 200,
-    });
-    return apiResponse.status === 200;
+    try {
+      const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
+        maxRedirects: 0,
+        withCredentials: true,
+        headers: {
+          cookie: this._credentials?.sessionCookies || "",
+        },
+        params: {
+          what: "status",
+          for: "Cagesitter (Maintained by Phillammon)",
+        },
+        validateStatus: (status) => status === 302 || status === 200,
+      });
+      return apiResponse.status === 200;
+    } catch {
+      console.log("Login check failed, returning false to be safe.")
+      return false;
+    }
   }
 
   async logIn(): Promise<boolean> {
     if (await this.loggedIn()) return true;
     if (this._isRollover) return false;
     console.log(`Not logged in. Logging in as ${this._loginParameters.get("loginname")}`);
-    const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
-      method: "POST",
-      data: this._loginParameters,
-      maxRedirects: 0,
-      validateStatus: (status) => status === 302,
-    });
-    const sessionCookies = loginResponse.headers["set-cookie"]
-      .map((cookie: string) => cookie.split(";")[0])
-      .join("; ");
     try {
+      const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
+        method: "POST",
+        data: this._loginParameters,
+        maxRedirects: 0,
+        validateStatus: (status) => status === 302,
+      });
+      const sessionCookies = loginResponse.headers["set-cookie"]
+        .map((cookie: string) => cookie.split(";")[0])
+        .join("; ");
       const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
         withCredentials: true,
         headers: {
