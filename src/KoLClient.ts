@@ -49,7 +49,7 @@ export class KoLClient {
   private _credentials?: KOLCredentials;
   private _lastFetchedMessages: string = "0";
   private _player?: KoLUser;
-  private _messageQueue: PrivateMessage[] = [];
+  private _isRollover: boolean = false;
 
   constructor(username: string, password: string) {
     this._loginParameters = new URLSearchParams();
@@ -62,51 +62,72 @@ export class KoLClient {
 
   async loggedIn(): Promise<boolean> {
     if (!this._credentials) return false;
-    const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
-      maxRedirects: 0,
-      withCredentials: true,
-      headers: {
-        cookie: this._credentials?.sessionCookies || "",
-      },
-      params: {
-        what: "status",
-        for: "Cagesitter (Maintained by Phillammon)",
-      },
-      validateStatus: (status) => status === 302 || status === 200,
-    });
-    return apiResponse.status === 200;
+    try {
+      const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
+        maxRedirects: 0,
+        withCredentials: true,
+        headers: {
+          cookie: this._credentials?.sessionCookies || "",
+        },
+        params: {
+          what: "status",
+          for: "Cagesitter (Maintained by Phillammon)",
+        },
+        validateStatus: (status) => status === 302 || status === 200,
+      });
+      return apiResponse.status === 200;
+    } catch {
+      console.log("Login check failed, returning false to be safe.")
+      return false;
+    }
   }
 
-  async logIn(): Promise<void> {
-    if (await this.loggedIn()) return;
+  async logIn(): Promise<boolean> {
+    if (await this.loggedIn()) return true;
+    if (this._isRollover) return false;
     console.log(`Not logged in. Logging in as ${this._loginParameters.get("loginname")}`);
-    const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
-      method: "POST",
-      data: this._loginParameters,
-      maxRedirects: 0,
-      validateStatus: (status) => status === 302,
-    });
-    const sessionCookies = loginResponse.headers["set-cookie"]
-      .map((cookie: string) => cookie.split(";")[0])
-      .join("; ");
-    const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
-      withCredentials: true,
-      headers: {
-        cookie: sessionCookies,
-      },
-      params: {
-        what: "status",
-        for: "Cagesitter (Maintained by Phillammon)",
-      },
-    });
-    this._credentials = {
-      sessionCookies: sessionCookies,
-      pwdhash: apiResponse.data.pwd,
-    };
-    this._player = {
-      id: apiResponse.data.playerid,
-      name: apiResponse.data.name,
-    };
+    try {
+      const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
+        method: "POST",
+        data: this._loginParameters,
+        maxRedirects: 0,
+        validateStatus: (status) => status === 302,
+      });
+      const sessionCookies = loginResponse.headers["set-cookie"]
+        .map((cookie: string) => cookie.split(";")[0])
+        .join("; ");
+      const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
+        withCredentials: true,
+        headers: {
+          cookie: sessionCookies,
+        },
+        params: {
+          what: "status",
+          for: "Cagesitter (Maintained by Phillammon)",
+        },
+      });
+      this._credentials = {
+        sessionCookies: sessionCookies,
+        pwdhash: apiResponse.data.pwd,
+      };
+      this._player = {
+        id: apiResponse.data.playerid,
+        name: apiResponse.data.name,
+      };
+      return true
+    } catch {
+      console.log("Login failed. Checking if it's because of rollover.")
+      await this.rolloverCheck()
+      return false
+    }
+  }
+
+  async rolloverCheck() {
+    this._isRollover = /The system is currently down for nightly maintenance\./.test((await axios("https://www.kingdomofloathing.com/")).data);
+    if (this._isRollover) {
+      console.log("Rollover appears to be in progress. Checking again in one minute.")
+      setTimeout(() => this.rolloverCheck(), 60000)
+    }
   }
 
   async visitUrl(
@@ -114,19 +135,23 @@ export class KoLClient {
     parameters: Record<string, any> = {},
     pwd: Boolean = true
   ): Promise<any> {
-    await this.logIn();
-    const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
-      method: "POST",
-      withCredentials: true,
-      headers: {
-        cookie: this._credentials?.sessionCookies || "",
-      },
-      params: {
-        ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
-        ...parameters,
-      },
-    });
-    return page.data;
+    if (this._isRollover || !await this.logIn()) return null;
+    try {
+      const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
+        method: "POST",
+        withCredentials: true,
+        headers: {
+          cookie: this._credentials?.sessionCookies || "",
+        },
+        params: {
+          ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
+          ...parameters,
+        },
+      });
+      return page.data;
+    } catch {
+      return null;
+    }
   }
 
   async useChatMacro(macro: string): Promise<void> {
@@ -145,6 +170,7 @@ export class KoLClient {
       j: 1,
       lasttime: this._lastFetchedMessages,
     });
+    if (!newChatMessagesResponse) return []
     this._lastFetchedMessages = newChatMessagesResponse["last"];
     const newWhispers: PrivateMessage[] = newChatMessagesResponse["msgs"]
       .filter((msg: KOLMessage) => msg["type"] === "private")
@@ -158,6 +184,7 @@ export class KoLClient {
 
   async getWhitelists(): Promise<KoLClan[]> {
     const clanRecuiterResponse = await this.visitUrl("clan_signup.php");
+    if (!clanRecuiterResponse) return []
     const clanIds = select(
       '//select[@name="whichclan"]/option/@value',
       parser.parseFromString(clanRecuiterResponse, "text/xml")
@@ -199,6 +226,7 @@ export class KoLClient {
       what: "status",
       for: "Cagesitter (Maintained by Phillammon)",
     });
-    return parseInt(apiResponse["adventures"], 10);
+    if (apiResponse) return parseInt(apiResponse["adventures"], 10);
+    return 0;
   }
 }
