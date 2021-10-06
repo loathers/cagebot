@@ -136,44 +136,49 @@ export class CageBot {
               `Attempting to get caged in ${targetClan.name}.`
             );
             console.log(`Beginning turns in ${targetClan.name} sewers.`);
-            while (!this._amCaged && (await this._client.getAdvs()) > 11) {
-              const adventureResponse = await this._client.visitUrl("adventure.php", {
-                snarfblat: 166,
-              });
-              if (/Despite All Your Rage/.test(adventureResponse)) {
-                this._amCaged = true;
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 211,
-                  option: 2,
-                });
-                console.log(`Caged!`);
-              } else if (/Disgustin\' Junction/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 198,
-                  option: 3,
-                });
-                grates += 1;
-                console.log(`Opened grate. Grate(s) so far: ${grates}.`);
-              } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 197,
-                  option: 3,
-                });
-                valves += 1;
-                console.log(`Opened valve. Valve(s) so far: ${valves}.`);
-              } else if (/The Former or the Ladder/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 199,
-                  option: 3,
-                });
-              }
-              if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
-                console.log(
-                  `Unexpectedly still in a choice after running possible choices. Aborting.`
-                );
-                break;
-              }
-            }
+while (!this._amCaged && (await this._client.getAdvs()) > 11) {
+  const adventureResponse = await this._client.visitUrl("adventure.php", {
+    snarfblat: 166,
+  });
+  if (/Despite All Your Rage/.test(adventureResponse)) {
+    this._amCaged = true;
+    await this._client.visitUrl("choice.php", {
+      whichchoice: 211,
+      option: 2,
+    });
+    console.log(`Caged!`);
+  } else if (/Disgustin\' Junction/.test(adventureResponse)) {
+    await this._client.visitUrl("choice.php", {
+      whichchoice: 198,
+      option: 3,
+    });
+    grates += 1;
+    console.log(`Opened grate. Grate(s) so far: ${grates}.`);
+  } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
+    await this._client.visitUrl("choice.php", {
+      whichchoice: 197,
+      option: 3,
+    });
+    valves += 1;
+    console.log(`Opened valve. Valve(s) so far: ${valves}.`);
+  } else if (/The Former or the Ladder/.test(adventureResponse)) {
+    await this._client.visitUrl("choice.php", {
+      whichchoice: 199,
+      option: 3,
+    });
+  } else if (/Pop!/.test(adventureResponse)) {
+    await this._client.visitUrl("choice.php", {
+      whichchoice: 296,
+      option: 1,
+    });
+  }
+  if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
+    console.log(
+      `Unexpectedly still in a choice after running possible choices. Aborting.`
+    );
+    break;
+  }
+}
             if (this._amCaged) {
               this._cageStatus = {
                 clan: targetClan.name,
