@@ -166,6 +166,11 @@ export class CageBot {
                   whichchoice: 199,
                   option: 3,
                 });
+              } else if (/Pop!/.test(adventureResponse)) {
+                await this._client.visitUrl("choice.php", {
+                  whichchoice: 296,
+                  option: 1,
+                });
               }
               if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
                 console.log(
