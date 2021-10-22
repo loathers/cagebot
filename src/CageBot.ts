@@ -354,22 +354,8 @@ export class CageBot {
   }
 
   async chewOut(): Promise<void> {
-    const adventureResponse = await this._client.visitUrl("adventure.php", {
-		snarfblat: 166,
-	  });
-
-	if (/Despite All Your Rage/.test(adventureResponse)) {
-	await this._client.visitUrl("choice.php", {
-		whichchoice: 212,
-		option: 1,
-	});
-	} else if (/Pop!/.test(adventureResponse)) {
-	await this._client.visitUrl("choice.php", {
-		whichchoice: 296,
-		option: 1,
-	});
-	}
-	  
+    await this._client.visitUrl("place.php");
+    await this._client.visitUrl("choice.php", { whichchoice: 212, option: 1 });
     this._amCaged = false;
     this._cageStatus = undefined;
   }
