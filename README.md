@@ -48,6 +48,15 @@ reads "runaway;repeat". If your account has means of running freely,
 feel free to add them too, but I take no responsibility for failures.
 If you need to tiebreak equipment, +noncombat rate is nice too.
 
+Optionally manually stock bot with the items below for consumption.
+Bot must be at least the associated level to consume these items.
+Currently bot will not buy these, only uses from inventory.
+
+- Fleetwood mac 'n' cheese (Level 8)
+- Crimbo pie (Level 7)
+- Psychotic Train wine (Level 11)
+- Middle of the Road™ brand whiskey (No level requirement)
+
 ## RUNNING
 To run cagebot, either run `npm run start` in the root directory, or just `node dist/index.js`, both are equivalent.
 

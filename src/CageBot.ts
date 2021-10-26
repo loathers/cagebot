@@ -136,7 +136,7 @@ export class CageBot {
               `Attempting to get caged in ${targetClan.name}.`
             );
             console.log(`Beginning turns in ${targetClan.name} sewers.`);
-            while (!this._amCaged && (await this._client.getAdvs()) > 11) {
+            while (!this._amCaged && (await this._client.getAdvs()) > 11 && (await this._client.getDrunk()) <= 14) {
               const adventureResponse = await this._client.visitUrl("adventure.php", {
                 snarfblat: 166,
               });
@@ -190,7 +190,7 @@ export class CageBot {
                 message.who,
                 `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
               );
-            } else if ((await this._client.getAdvs()) <= 11) {
+            } else if ( !(await this.advLeft(message)) ) {
               console.log(
                 `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
               );
@@ -326,6 +326,12 @@ export class CageBot {
         `I am not presently caged and have ${await this._client.getAdvs()} adventures left.`
       );
     }
+	//always send info on how full the bot is.
+	//todo: assumes max values. Should check for actual
+	await this._client.sendPrivateMessage(
+        message.who,
+        `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/14.`
+      );
   }
 
   async didntUnderstand(message: PrivateMessage): Promise<void> {
@@ -358,5 +364,55 @@ export class CageBot {
     await this._client.visitUrl("choice.php", { whichchoice: 212, option: 1 });
     this._amCaged = false;
     this._cageStatus = undefined;
+  }
+
+  async advLeft(message: PrivateMessage): Promise<boolean> {
+    const beforeAdv = await this._client.getAdvs();
+	if (beforeAdv > 11){
+		return true;
+	}
+	
+	const currentFull = await this._client.getFull();
+	const currentDrunk = await this._client.getDrunk();	
+	if((currentFull >=15) && (currentDrunk >= 14)){
+		// have consumed as much as we can for the day and low on adventures
+		return false;
+	}
+
+	const currentLevel = await this._client.getLevel();
+	let itemConsumed = "";
+	if ((currentFull <= 9) && (currentLevel >= 8)){
+		//eat Fleetwood Mac 'n' Cheese since >= 6 fullness available and sufficient level
+		itemConsumed = "Fleetwood mac 'n' cheese";
+		console.log(`Attempting to eat ${itemConsumed}`);
+		this._client.eat(7215);
+	}
+	else if ((currentFull <= 12) && (currentLevel >= 7)){
+		//eat Crimbo pie since >= 3 fullness available and sufficient level
+		itemConsumed = "Crimbo pie";
+		console.log(`Attempting to eat ${itemConsumed}`);
+		this._client.eat(2767);
+	}
+	else if ((currentDrunk <= 8) && (currentLevel >= 11)){
+		//drink Psychotic Train wine since >= 6 drunk available and sufficient level
+		itemConsumed = "Psychotic Train wine";
+		console.log(`Attempting to drink ${itemConsumed}`);
+		this._client.drink(7370);
+	}
+	else if (currentDrunk <= 12){
+		//drink middle of the road since >= 2 drunk available 
+		itemConsumed = "Middle of the Road™ brand whiskey";
+		console.log(`Attempting to drink ${itemConsumed}`);
+		this._client.drink(9948);
+	}
+
+	const afterAdv = await this._client.getAdvs();
+	if(beforeAdv === afterAdv){
+		console.log(`I am out of ${itemConsumed}.`);
+		this._client.sendPrivateMessage(message.who, `Please tell my operator that I am out of ${itemConsumed}.`);
+	}
+
+	return afterAdv > 11;
+
   }
 }
