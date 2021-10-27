@@ -165,6 +165,20 @@ export class KoLClient {
     await this.useChatMacro(`/w ${recipient.id} ${message}`);
   }
 
+  async eat(foodID: number): Promise<void> {
+	await this.visitUrl("inv_eat.php", {
+		which: 1,
+		whichitem: foodID,
+	  });
+  }
+
+  async drink(drinkID: number): Promise<void> {
+	await this.visitUrl("inv_booze.php", {
+		which: 1,
+		whichitem: drinkID,
+	  });
+  }
+
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
     const newChatMessagesResponse = await this.visitUrl("newchatmessages.php", {
       j: 1,
@@ -229,4 +243,33 @@ export class KoLClient {
     if (apiResponse) return parseInt(apiResponse["adventures"], 10);
     return 0;
   }
+
+  async getFull(): Promise<number> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+    if (apiResponse) return parseInt(apiResponse["full"], 10);
+    return 0;
+  }
+
+  async getDrunk(): Promise<number> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+    if (apiResponse) return parseInt(apiResponse["drunk"], 10);
+    return 0;
+  }
+
+  async getLevel(): Promise<number> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+    if (apiResponse) return parseInt(apiResponse["level"], 10);
+    return 0;
+  }
+
+  
 }
