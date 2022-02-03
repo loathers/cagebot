@@ -43,6 +43,13 @@ export class CageBot {
         console.log('!!! reading "runaway;repeat;". Please !!!');
         console.log("!!! make that now and rerun.          !!!");
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.log("!!! For hamster mode to work properly !!!");
+        console.log("!!! this account MUST have CLEESH and !!!");
+        console.log("!!! the macro MUST instead read       !!!");
+        console.log('!!! "CLEESH;runaway;repeat;". Please  !!!');
+        console.log("!!! ensure the account won't die to   !!!");
+        console.log("!!! the sewer monsters before CLEESH. !!!");
+        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         throw "Macro required to continue.";

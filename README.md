@@ -48,6 +48,12 @@ reads "runaway;repeat". If your account has means of running freely,
 feel free to add them too, but I take no responsibility for failures.
 If you need to tiebreak equipment, +noncombat rate is nice too.
 
+If the account is to bait for hamster runs, please ensure that the account
+has CLEESH, and the CAGEBOT macro reads "CLEESH;runaway;repeat". Please
+purchase a lucky rabbitfish fin and use it as one of your accessories.
+This removes the need for Whatsian Ionic Pliers. The cagebait should be 
+able to not get hit by the sewer monsters prior to casting CLEESH.
+
 Optionally manually stock bot with the items below for consumption.
 Bot must be at least the associated level to consume these items.
 Currently bot will not buy these, only uses from inventory.
@@ -70,6 +76,7 @@ Cagebot is used by sending in-game whispers to the account with which it is asso
   * Cagebot does not have sufficient clan permissions to adventure in hobopolis in the specified clan.
   * Hobopolis is not open in the specified clan.
   * Cagebot falls to eleven or fewer adventures remaining.
+- `hamster [clanname]`: Same as `cage`, but the cagebait will CLEESH on the way to the cage and only open grates, up to 11 total. Please check with the bait operator beforehand that the account can perform this task.
 - `escape`: If cagebot is presently caged, and the person sending the `escape` command is the one who sent the original `cage` command, it attempts to free itself from the cage. If it has been released via The Former Or The Ladder, it will escape without spending turns, otherwise, it spends ten adventures to chew out of the cage.
 - `release`: As escape, attempts to escape from the cage it is presently in, however this can be used by anyone, not just the original sender of the `cage` command. The `release` command can only be used if cagebot has been caged for at least an hour (to prevent cagebot getting stuck due to the original cager logging off for the day, for example), or if cagebot cannot ascertain who initially caged it (for example, because the bot was restarted while in a cage)
 - `status`: Returns the current status of cagebot. Specifically:
