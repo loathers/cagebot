@@ -43,6 +43,13 @@ export class CageBot {
         console.log('!!! reading "runaway;repeat;". Please !!!');
         console.log("!!! make that now and rerun.          !!!");
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.log("!!! For hamster mode to work properly !!!");
+        console.log("!!! this account MUST have CLEESH and !!!");
+        console.log("!!! the macro MUST instead read       !!!");
+        console.log('!!! "CLEESH;runaway;repeat;". Please  !!!');
+        console.log("!!! ensure the account won't die to   !!!");
+        console.log("!!! the sewer monsters before CLEESH. !!!");
+        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         throw "Macro required to continue.";
@@ -74,7 +81,8 @@ export class CageBot {
         console.log(`Processing whisper from ${message.who.name} (#${message.who.id})`);
         const processedMsg = message.msg.toLowerCase();
         if (processedMsg.startsWith("status")) await this.statusReport(message, true);
-        else if (processedMsg.startsWith("cage")) await this.becomeCaged(message);
+        else if (processedMsg.startsWith("cage")) await this.becomeCaged(message, false);
+        else if (processedMsg.startsWith("hamster")) await this.becomeCaged(message, true);
         else if (processedMsg.startsWith("escape")) await this.escapeCage(message);
         else if (processedMsg.startsWith("release")) await this.releaseCage(message);
         else if (processedMsg.startsWith("help")) await this.helpText(message);
@@ -84,8 +92,22 @@ export class CageBot {
     } else setTimeout(() => this.processMessage(), 1000);
   }
 
-  async becomeCaged(message: PrivateMessage): Promise<void> {
-    const clanName = message.msg.slice(5);
+  async becomeCaged(message: PrivateMessage, isHamster: boolean = false): Promise<void> {
+    //set up choice adventures
+    let grateChoice = 3;
+    let valveChoice = 3;
+    let cageChoice = 3;
+    if (isHamster) {
+      //skip all non-grate noncombats by turning them to (CLEESH) combats
+      valveChoice = 2;
+      cageChoice = 2;
+    }
+    //these many grates are to be opened in hamster mode
+    //TODO: figure out a way to read this from the chat message?
+    const hamsterGrates = 11;
+    //the clan name comes after the first space, but may include spaces too
+    //so just strip out the original command and glue the string back together
+    const clanName = message.msg.split(" ").slice(1).join(' ');
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
     if (this._amCaged) {
       console.log(`Already caged. Sending status report instead.`);
@@ -150,21 +172,32 @@ export class CageBot {
               } else if (/Disgustin\' Junction/.test(adventureResponse)) {
                 await this._client.visitUrl("choice.php", {
                   whichchoice: 198,
-                  option: 3,
+                  option: grateChoice,
                 });
-                grates += 1;
-                console.log(`Opened grate. Grate(s) so far: ${grates}.`);
+                //some grates happen in hamsters
+                if (!isHamster || grates < hamsterGrates) {
+                  grates += 1;
+                  console.log(`Opened grate. Grate(s) so far: ${grates}.`);
+                }
+                //but if enough grates happen, then it's time to stop opening them
+                if (isHamster && grates >= hamsterGrates) {
+                  grateChoice = 2;
+                  console.log(`Hit hamster grate total: ${hamsterGrates}.`);
+                }
               } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
                 await this._client.visitUrl("choice.php", {
                   whichchoice: 197,
-                  option: 3,
+                  option: valveChoice,
                 });
-                valves += 1;
-                console.log(`Opened valve. Valve(s) so far: ${valves}.`);
+                //the valve turn only happens in non-hamster mode
+                if (!isHamster) {
+                  valves += 1;
+                  console.log(`Opened valve. Valve(s) so far: ${valves}.`);
+                }
               } else if (/The Former or the Ladder/.test(adventureResponse)) {
                 await this._client.visitUrl("choice.php", {
                   whichchoice: 199,
-                  option: 3,
+                  option: cageChoice,
                 });
               } else if (/Pop!/.test(adventureResponse)) {
                 await this._client.visitUrl("choice.php", {
