@@ -107,7 +107,7 @@ export class CageBot {
     const hamsterGrates = 11;
     //the clan name comes after the first space, but may include spaces too
     //so just strip out the original command and glue the string back together
-    const clanName = message.msg..split(" ").slice(1).join(' ');
+    const clanName = message.msg.split(" ").slice(1).join(' ');
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
     if (this._amCaged) {
       console.log(`Already caged. Sending status report instead.`);
