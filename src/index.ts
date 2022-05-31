@@ -23,6 +23,7 @@ console.log("  package.json). This file should be in the form:");
 console.log();
 console.log("  KOL_USER='Cagebot'");
 console.log("  KOL_PASS='Cagebot P4ssw0rD'");
+console.log("  OPEN_EVERYTHING='true/false'");
 console.log();
 console.log();
 console.log("INGAME SETUP");
@@ -50,6 +51,10 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
   console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 } else {
-  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS);
+  const cageBot = new CageBot(
+    process.env.KOL_USER,
+    process.env.KOL_PASS,
+    process.env.OPEN_EVERYTHING === "true"
+  );
   cageBot.start();
 }

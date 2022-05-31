@@ -14,13 +14,16 @@ export class CageBot {
   private _client: KoLClient;
   private _amCaged: boolean = false;
   private _cageStatus?: CagedStatus;
+  private _openEverything: boolean;
 
-  constructor(username: string, password: string) {
+  constructor(username: string, password: string, openEverything: boolean) {
     this._client = new KoLClient(username, password);
+    this._openEverything = openEverything;
   }
 
   start(): void {
     console.log("Starting Cagebot...");
+
     this.initialSetup().then(() => {
       console.log("Initial setup complete. Polling messages.");
       setInterval(
@@ -33,6 +36,7 @@ export class CageBot {
 
   async initialSetup(): Promise<void> {
     this._amCaged = /Despite All Your Rage/.test(await this._client.visitUrl("place.php"));
+
     if (!this._amCaged) {
       if (!/CAGEBOT/.test(await this._client.visitUrl("account_combatmacros.php"))) {
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
@@ -96,6 +100,27 @@ export class CageBot {
     }
   }
 
+  async readGratesAndValves(): Promise<[number, number]> {
+    const raidlogsResponse = (await this._client.visitUrl("clan_raidlogs.php")) as string;
+    const regexGrates =
+      raidlogsResponse.match(/opened a sewer grate (?:\d+ times )?\((\d+) turns?\)/g) || [];
+    const regexValves =
+      raidlogsResponse.match(/lowered the water level (?:\d+ times )?\((\d+) turns?\)/g) || [];
+
+    let gratesOpened: number = 0;
+    let valvesTwisted: number = 0;
+
+    for (let g of regexGrates) {
+      gratesOpened += +g;
+    }
+
+    for (let v of regexValves) {
+      valvesTwisted += +v;
+    }
+
+    return [gratesOpened, valvesTwisted];
+  }
+
   async becomeCaged(message: PrivateMessage): Promise<void> {
     const clanName = message.msg.slice(5);
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
@@ -149,118 +174,159 @@ export class CageBot {
               `I can't seem to access the sewers in ${targetClan.name}. Is Hobopolis open? Do I have the right permissions?`
             );
           } else {
-            let grates = 0;
-            let valves = 0;
-
-            const startAdv = await this._client.getAdvs();
-            await this._client.sendPrivateMessage(
-              message.who,
-              `Attempting to get caged in ${targetClan.name}.`
-            );
-
-            console.log(`Beginning turns in ${targetClan.name} sewers.`);
-
-            while (
-              !this._amCaged &&
-              (await this._client.getAdvs()) > 11 &&
-              (await this._client.getDrunk()) <= 14
-            ) {
-              const adventureResponse = await this._client.visitUrl("adventure.php", {
-                snarfblat: 166,
-              });
-              if (/Despite All Your Rage/.test(adventureResponse)) {
-                this._amCaged = true;
-
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 211,
-                  option: 2,
-                });
-
-                console.log(`Caged!`);
-              } else if (/Disgustin\' Junction/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 198,
-                  option: 3,
-                });
-
-                grates += 1;
-                console.log(`Opened grate. Grate(s) so far: ${grates}.`);
-              } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 197,
-                  option: 3,
-                });
-
-                valves += 1;
-                console.log(`Opened valve. Valve(s) so far: ${valves}.`);
-              } else if (/The Former or the Ladder/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 199,
-                  option: 3,
-                });
-              } else if (/Pop!/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 296,
-                  option: 1,
-                });
-              }
-
-              if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
-                console.log(
-                  `Unexpectedly still in a choice after running possible choices. Aborting.`
-                );
-
-                break;
-              }
-            }
-
-            if (this._amCaged) {
-              this._cageStatus = {
-                clan: targetClan.name,
-                requester: message.who,
-                cagedAt: Date.now(),
-              };
-
-              console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
-
-              await this._client.sendPrivateMessage(
-                message.who,
-                `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
-              );
-            } else if (!(await this.advLeft(message))) {
-              console.log(
-                `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
-              );
-
-              await this._client.sendPrivateMessage(
-                message.who,
-                `I ran out of adventures trying to get caged in ${targetClan.name}.`
-              );
-            } else {
-              console.log(
-                `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
-              );
-
-              await this._client.sendPrivateMessage(
-                message.who,
-                `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
-              );
-            }
-
-            const endAdvs = await this._client.getAdvs();
-            const spentAdvs = startAdv - endAdvs;
-
-            await this._client.sendPrivateMessage(
-              message.who,
-              `I opened ${grates} grate${grates === 1 ? "" : "s"} and turned ${valves} valve${
-                valves === 1 ? "" : "s"
-              } on the way, and spent ${spentAdvs} adventure${
-                spentAdvs === 1 ? "" : "s"
-              } (${endAdvs} remaining).`
-            );
+            await this.attemptCage(message, targetClan);
           }
         }
       }
+    }
+  }
+
+  async attemptCage(message: PrivateMessage, targetClan: KoLClan): Promise<void> {
+    let gratesOpened = 0;
+    let valvesTwisted = 0;
+    const [gratesFoundOpen, valvesFoundTwisted] = await this.readGratesAndValves();
+    const startAdv = await this._client.getAdvs();
+    let estimatedTurnsSpent: number = 0;
+
+    const escapeCageToOpenGratesAndValues: () => boolean = () => {
+      if (!this._openEverything) {
+        return false;
+      }
+
+      // If we have less than this turns, lets not burn the adventures
+      if (startAdv - estimatedTurnsSpent < 80) {
+        return false;
+      }
+
+      if (valvesTwisted + valvesFoundTwisted < 20) {
+        // Only if we have a ton of adventures, do we burn turns on values when grates are done.
+        if (startAdv - estimatedTurnsSpent > 150) {
+          return true;
+        }
+      }
+
+      return gratesOpened + gratesFoundOpen < 20;
+    };
+
+    await this._client.sendPrivateMessage(
+      message.who,
+      `Attempting to get caged in ${targetClan.name}.`
+    );
+
+    console.log(`Beginning turns in ${targetClan.name} sewers.`);
+
+    while (
+      !this._amCaged &&
+      (await this._client.getAdvs()) > 11 &&
+      (await this._client.getDrunk()) <= 14
+    ) {
+      estimatedTurnsSpent += 1;
+
+      const adventureResponse = await this._client.visitUrl("adventure.php", {
+        snarfblat: 166,
+      });
+      if (/Despite All Your Rage/.test(adventureResponse)) {
+        if (escapeCageToOpenGratesAndValues()) {
+          await this.chewOut();
+        } else {
+          this._amCaged = true;
+
+          await this._client.visitUrl("choice.php", {
+            whichchoice: 211,
+            option: 2,
+          });
+
+          console.log(`Caged!`);
+        }
+      } else if (/Disgustin\' Junction/.test(adventureResponse)) {
+        await this._client.visitUrl("choice.php", {
+          whichchoice: 198,
+          option: 3,
+        });
+
+        gratesOpened += 1;
+        console.log(`Opened grate. Grate(s) so far: ${gratesOpened}.`);
+      } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
+        await this._client.visitUrl("choice.php", {
+          whichchoice: 197,
+          option: 3,
+        });
+
+        valvesTwisted += 1;
+        console.log(`Opened valve. Valve(s) so far: ${valvesTwisted}.`);
+      } else if (/The Former or the Ladder/.test(adventureResponse)) {
+        await this._client.visitUrl("choice.php", {
+          whichchoice: 199,
+          option: 3,
+        });
+      } else if (/Pop!/.test(adventureResponse)) {
+        await this._client.visitUrl("choice.php", {
+          whichchoice: 296,
+          option: 1,
+        });
+      }
+
+      if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
+        console.log(`Unexpectedly still in a choice after running possible choices. Aborting.`);
+
+        break;
+      }
+    }
+
+    if (this._amCaged) {
+      this._cageStatus = {
+        clan: targetClan.name,
+        requester: message.who,
+        cagedAt: Date.now(),
+      };
+
+      console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
+
+      await this._client.sendPrivateMessage(
+        message.who,
+        `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
+      );
+    } else if (!(await this.advLeft(message))) {
+      console.log(
+        `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
+      );
+
+      await this._client.sendPrivateMessage(
+        message.who,
+        `I ran out of adventures trying to get caged in ${targetClan.name}.`
+      );
+    } else {
+      console.log(
+        `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
+      );
+
+      await this._client.sendPrivateMessage(
+        message.who,
+        `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
+      );
+    }
+
+    const endAdvs = await this._client.getAdvs();
+    const spentAdvs = startAdv - endAdvs;
+
+    await this._client.sendPrivateMessage(
+      message.who,
+      `I opened ${gratesOpened} grate${
+        gratesOpened === 1 ? "" : "s"
+      } and turned ${valvesTwisted} valve${
+        valvesTwisted === 1 ? "" : "s"
+      } on the way, and spent ${spentAdvs} adventure${
+        spentAdvs === 1 ? "" : "s"
+      } (${endAdvs} remaining).`
+    );
+
+    if (this._openEverything && (gratesOpened > 0 || valvesTwisted > 0)) {
+      await this._client.sendPrivateMessage(
+        message.who,
+        `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
+          valvesTwisted + valvesFoundTwisted
+        } / 20 values twisted`
+      );
     }
   }
 
