@@ -69,24 +69,37 @@ export class CageBot {
 
   async processMessage(): Promise<void> {
     const message = this._privateMessages.shift();
+
     if (message) {
       await mutex.runExclusive(async () => {
         console.log(`Processing whisper from ${message.who.name} (#${message.who.id})`);
         const processedMsg = message.msg.toLowerCase();
-        if (processedMsg.startsWith("status")) await this.statusReport(message, true);
-        else if (processedMsg.startsWith("cage")) await this.becomeCaged(message);
-        else if (processedMsg.startsWith("escape")) await this.escapeCage(message);
-        else if (processedMsg.startsWith("release")) await this.releaseCage(message);
-        else if (processedMsg.startsWith("help")) await this.helpText(message);
-        else await this.didntUnderstand(message);
+
+        if (processedMsg.startsWith("status")) {
+          await this.statusReport(message, true);
+        } else if (processedMsg.startsWith("cage")) {
+          await this.becomeCaged(message);
+        } else if (processedMsg.startsWith("escape")) {
+          await this.escapeCage(message);
+        } else if (processedMsg.startsWith("release")) {
+          await this.releaseCage(message);
+        } else if (processedMsg.startsWith("help")) {
+          await this.helpText(message);
+        } else {
+          await this.didntUnderstand(message);
+        }
       });
+
       this.processMessage();
-    } else setTimeout(() => this.processMessage(), 1000);
+    } else {
+      setTimeout(() => this.processMessage(), 1000);
+    }
   }
 
   async becomeCaged(message: PrivateMessage): Promise<void> {
     const clanName = message.msg.slice(5);
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
+
     if (this._amCaged) {
       console.log(`Already caged. Sending status report instead.`);
       await this.statusReport(message);
