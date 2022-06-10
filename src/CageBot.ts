@@ -7,6 +7,20 @@ type CagedStatus = {
   cagedAt: number;
 };
 
+type Diet = {
+  type: "food" | "drink";
+  id: number;
+  name: string;
+  level: number;
+  fullness: number;
+};
+
+export type Settings = {
+  maintainAdventures: number;
+  openEverything: boolean;
+  openEverythingWhileAdventuresAbove: number;
+};
+
 const mutex = new Mutex();
 
 export class CageBot {
@@ -14,15 +28,28 @@ export class CageBot {
   private _client: KoLClient;
   private _amCaged: boolean = false;
   private _cageStatus?: CagedStatus;
-  private _openEverything: boolean;
+  private _settings: Settings;
+  private _diet: Diet[] = [];
+  private _maxDrunk: number = 14;
+  private _ownsTuxedo: boolean = false;
+  private _usingBarrelMimic: boolean = false;
+  private _doneInitialSetup: boolean = false;
 
-  constructor(username: string, password: string, openEverything: boolean) {
+  constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
-    this._openEverything = openEverything;
+    this._settings = settings;
   }
 
   start(): void {
     console.log("Starting Cagebot...");
+
+    if (this._settings.openEverything) {
+      console.log(
+        "While adventures are above " +
+          this._settings.openEverythingWhileAdventuresAbove +
+          ", we're escaping the cage to open grates and valves."
+      );
+    }
 
     this.initialSetup().then(() => {
       console.log("Initial setup complete. Polling messages.");
@@ -67,7 +94,183 @@ export class CageBot {
           value: macroId,
           ajax: 1,
         });
+
+        if (/>Liver of Steel<\/a>/.test(await this._client.visitUrl("charsheet.php"))) {
+          this._maxDrunk = 19;
+        }
+
+        this._ownsTuxedo =
+          (await this._client.getInventory()).has(2489) ||
+          (await this._client.getEquipment()).get("shirt") == 2489;
+
+        this._usingBarrelMimic = (await this._client.getFamiliar()) == 198;
+
+        if (this._usingBarrelMimic) {
+          this.fillLilBarrelDietData();
+        } else {
+          this.fillDietData();
+        }
       }
+
+      this._doneInitialSetup = true;
+    }
+  }
+
+  fillDietData() {
+    this._diet.push({
+      type: "food",
+      id: 7215,
+      name: "Fleetwood mac 'n' cheese",
+      level: 8,
+      fullness: 6,
+    });
+    this._diet.push({
+      type: "food",
+      id: 2767,
+      name: "Crimbo pie",
+      level: 7,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "drink",
+      id: 7370,
+      name: "Psychotic Train wine",
+      level: 11,
+      fullness: 6,
+    });
+    this._diet.push({
+      type: "drink",
+      id: 9948,
+      name: "Middle of the Road™ brand whiskey",
+      level: 1,
+      fullness: 2,
+    });
+  }
+
+  fillLilBarrelDietData() {
+    // Awesome
+    this._diet.push({
+      type: "food",
+      id: 319,
+      name: "Insanely spicy enchanted bean burrito",
+      level: 5,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 316,
+      name: "Insanely spicy bean burrito",
+      level: 4,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 1256,
+      name: "Insanely spicy jumping bean burrito",
+      level: 4,
+      fullness: 3,
+    });
+
+    // Good
+    this._diet.push({
+      type: "food",
+      id: 318,
+      name: "Spicy enchanted bean burrito",
+      level: 4,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 315,
+      name: "Spicy bean burrito",
+      level: 3,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 1255,
+      name: "Spicy jumping bean burrito",
+      level: 3,
+      fullness: 3,
+    });
+
+    // Decent
+    this._diet.push({
+      type: "food",
+      id: 317,
+      name: "Enchanted bean burrito",
+      level: 2,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 314,
+      name: "Bean burrito",
+      level: 1,
+      fullness: 3,
+    });
+    this._diet.push({
+      type: "food",
+      id: 1254,
+      name: "Jumping bean burrito",
+      level: 1,
+      fullness: 3,
+    });
+
+    // Good
+    for (let [name, drinkId] of [
+      ["Roll in the hay", 679],
+      ["Slap and Tickle", 680],
+      ["Slip 'n' slide", 681],
+      ["A little sump'm sump'm", 682],
+      ["Pink pony", 684],
+      ["Rockin' wagon", 797],
+      ["Fuzzbump", 799],
+      ["Calle de miel", 1018],
+    ]) {
+      this._diet.push({
+        type: "drink",
+        id: drinkId as number,
+        name: name as string,
+        level: 4,
+        fullness: 4,
+      });
+    }
+
+    // Good
+    for (let [name, drinkId] of [
+      ["Gin and tonic", 1567],
+      ["Gibson", 1570],
+      ["Vodka and tonic", 1568],
+      ["Mimosette", 1564],
+      ["Tequila sunset", 1565],
+      ["Zmobie", 1566],
+    ]) {
+      this._diet.push({
+        type: "drink",
+        id: drinkId as number,
+        name: name as string,
+        level: 3,
+        fullness: 3,
+      });
+    }
+
+    // Decent
+    for (let [name, drinkId] of [
+      ["Screwdriver", 250],
+      ["Tequila sunrise", 1012],
+      ["Martini", 251],
+      ["Vodka martini", 1009],
+      ["Strawberry daiquiri", 788],
+      ["Margarita", 1013],
+    ]) {
+      this._diet.push({
+        type: "drink",
+        id: drinkId as number,
+        name: name as string,
+        level: 1,
+        fullness: 3,
+      });
     }
   }
 
@@ -103,19 +306,21 @@ export class CageBot {
   async readGratesAndValves(): Promise<[number, number]> {
     const raidlogsResponse = (await this._client.visitUrl("clan_raidlogs.php")) as string;
     const regexGrates =
-      raidlogsResponse.match(/opened a sewer grate (?:\d+ times )?\((\d+) turns?\)/g) || [];
+      raidlogsResponse.matchAll(
+        /opened (?:a|(?:\d+)) sewer grates? (?:\d+ times )?\((\d+) turns?\)/g
+      ) || [];
     const regexValves =
-      raidlogsResponse.match(/lowered the water level (?:\d+ times )?\((\d+) turns?\)/g) || [];
+      raidlogsResponse.matchAll(/lowered the water level (?:\d+ times )?\((\d+) turns?\)/g) || [];
 
     let gratesOpened: number = 0;
     let valvesTwisted: number = 0;
 
     for (let g of regexGrates) {
-      gratesOpened += +g;
+      gratesOpened += parseInt(g[1]);
     }
 
     for (let v of regexValves) {
-      valvesTwisted += +v;
+      valvesTwisted += parseInt(v[1]);
     }
 
     return [gratesOpened, valvesTwisted];
@@ -184,23 +389,30 @@ export class CageBot {
   async attemptCage(message: PrivateMessage, targetClan: KoLClan): Promise<void> {
     let gratesOpened = 0;
     let valvesTwisted = 0;
-    const [gratesFoundOpen, valvesFoundTwisted] = await this.readGratesAndValves();
-    const startAdv = await this._client.getAdvs();
+    const [gratesFoundOpen, valvesFoundTwisted]: [number, number] = this._settings.openEverything
+      ? await this.readGratesAndValves()
+      : [0, 0];
+    let currentAdventures = await this._client.getAdvs();
     let estimatedTurnsSpent: number = 0;
+    let totalTurnsSpent: number = 0;
+    let failedToMaintain = false;
 
     const escapeCageToOpenGratesAndValues: () => boolean = () => {
-      if (!this._openEverything) {
+      if (!this._settings.openEverything) {
         return false;
       }
 
       // If we have less than this turns, lets not burn the adventures
-      if (startAdv - estimatedTurnsSpent < 80) {
+      if (
+        currentAdventures - estimatedTurnsSpent <=
+        this._settings.openEverythingWhileAdventuresAbove
+      ) {
         return false;
       }
 
-      if (valvesTwisted + valvesFoundTwisted < 20) {
-        // Only if we have a ton of adventures, do we burn turns on values when grates are done.
-        if (startAdv - estimatedTurnsSpent > 150) {
+      if (gratesOpened + gratesFoundOpen >= 20 && valvesTwisted + valvesFoundTwisted < 20) {
+        // Only if we have a large surplus of adventures, do we burn turns on values when grates are done.
+        if (currentAdventures - estimatedTurnsSpent > 160) {
           return true;
         }
       }
@@ -214,46 +426,74 @@ export class CageBot {
     );
 
     console.log(`Beginning turns in ${targetClan.name} sewers.`);
+    let currentDrunk: number = await this._client.getDrunk();
 
     while (
       !this._amCaged &&
-      (await this._client.getAdvs()) > 11 &&
-      (await this._client.getDrunk()) <= 14
+      currentAdventures - estimatedTurnsSpent > 11 &&
+      currentDrunk <= this._maxDrunk
     ) {
+      // If we haven't failed to maintain our adventures yet
+      if (!failedToMaintain) {
+        // If we're at or lower than the amount of adventures we wish to maintain.
+        if (currentAdventures - estimatedTurnsSpent <= this._settings.maintainAdventures) {
+          let adventuresAtm = await this._client.getAdvs();
+
+          // Add total turns spent as far
+          totalTurnsSpent += currentAdventures - adventuresAtm;
+          // Reset our estimated
+          estimatedTurnsSpent = 0;
+
+          // Function returns the new adventures remaining
+          let adventuresRemaining = await this.maintainAdventures(message);
+          // Update current drunk level
+          currentDrunk = await this._client.getDrunk();
+
+          // If the adventures remaining are at, or less than our estimated adventures remaining. Then we failed to maintain our diet.
+          failedToMaintain = adventuresAtm <= adventuresRemaining;
+          currentAdventures = adventuresRemaining;
+        }
+      }
+
       estimatedTurnsSpent += 1;
 
       const adventureResponse = await this._client.visitUrl("adventure.php", {
         snarfblat: 166,
       });
       if (/Despite All Your Rage/.test(adventureResponse)) {
+        this._amCaged = true;
+
+        await this._client.visitUrl("choice.php", {
+          whichchoice: 211,
+          option: 2,
+        });
+
         if (escapeCageToOpenGratesAndValues()) {
           await this.chewOut();
+          estimatedTurnsSpent += 10;
         } else {
-          this._amCaged = true;
-
-          await this._client.visitUrl("choice.php", {
-            whichchoice: 211,
-            option: 2,
-          });
-
           console.log(`Caged!`);
         }
       } else if (/Disgustin\' Junction/.test(adventureResponse)) {
-        await this._client.visitUrl("choice.php", {
+        const choiceResponse = await this._client.visitUrl("choice.php", {
           whichchoice: 198,
           option: 3,
         });
 
-        gratesOpened += 1;
-        console.log(`Opened grate. Grate(s) so far: ${gratesOpened}.`);
+        if (/too tired to explore the tunnel on the other side/i.test(choiceResponse)) {
+          gratesOpened += 1;
+          console.log(`Opened grate. Grate(s) so far: ${gratesOpened}.`);
+        }
       } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
-        await this._client.visitUrl("choice.php", {
+        const choiceResponse = await this._client.visitUrl("choice.php", {
           whichchoice: 197,
           option: 3,
         });
 
-        valvesTwisted += 1;
-        console.log(`Opened valve. Valve(s) so far: ${valvesTwisted}.`);
+        if (/as the water level in the sewer lowers by a couple of inches/i.test(choiceResponse)) {
+          valvesTwisted += 1;
+          console.log(`Opened valve. Valve(s) so far: ${valvesTwisted}.`);
+        }
       } else if (/The Former or the Ladder/.test(adventureResponse)) {
         await this._client.visitUrl("choice.php", {
           whichchoice: 199,
@@ -286,28 +526,36 @@ export class CageBot {
         message.who,
         `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
       );
-    } else if (!(await this.advLeft(message))) {
-      console.log(
-        `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
-      );
-
-      await this._client.sendPrivateMessage(
-        message.who,
-        `I ran out of adventures trying to get caged in ${targetClan.name}.`
-      );
     } else {
-      console.log(
-        `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
-      );
+      if (currentAdventures - estimatedTurnsSpent <= 11) {
+        console.log(
+          `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
+        );
 
-      await this._client.sendPrivateMessage(
-        message.who,
-        `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
-      );
+        await this._client.sendPrivateMessage(
+          message.who,
+          `I ran out of adventures trying to get caged in ${targetClan.name}.`
+        );
+      } else {
+        console.log(
+          `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
+        );
+
+        await this._client.sendPrivateMessage(
+          message.who,
+          `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
+        );
+      }
     }
 
     const endAdvs = await this._client.getAdvs();
-    const spentAdvs = startAdv - endAdvs;
+    const spentAdvs = totalTurnsSpent + (currentAdventures - endAdvs);
+
+    if (estimatedTurnsSpent + totalTurnsSpent != spentAdvs) {
+      console.log(
+        `We estimated ${estimatedTurnsSpent} + ${totalTurnsSpent} turns spent, ${spentAdvs} turns were actually spent.`
+      );
+    }
 
     await this._client.sendPrivateMessage(
       message.who,
@@ -320,7 +568,7 @@ export class CageBot {
       } (${endAdvs} remaining).`
     );
 
-    if (this._openEverything && (gratesOpened > 0 || valvesTwisted > 0)) {
+    if (this._settings.openEverything && (gratesOpened > 0 || valvesTwisted > 0)) {
       await this._client.sendPrivateMessage(
         message.who,
         `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
@@ -362,11 +610,13 @@ export class CageBot {
         console.log(`Release timer has not yet expired, sending status report instead.`);
       }
 
+      await this.initialSetup();
       await this.statusReport(message);
     } else {
       const prevStatus = this._cageStatus;
 
       await this.chewOut();
+      await this.initialSetup();
 
       console.log(`Successfully chewed out of cage. Reporting success.`);
 
@@ -459,7 +709,9 @@ export class CageBot {
     //todo: assumes max values. Should check for actual
     await this._client.sendPrivateMessage(
       message.who,
-      `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/14.`
+      `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/${
+        this._maxDrunk
+      }.`
     );
   }
 
@@ -498,10 +750,16 @@ export class CageBot {
     });
 
     if (/Despite All Your Rage/.test(adventureResponse)) {
-      await this._client.visitUrl("choice.php", {
-        whichchoice: 212,
+      // We do a regex choice on the choice ID because there are two possible choices
+      const chewResponse = await this._client.visitUrl("choice.php", {
+        whichchoice: / value=211>/.test(adventureResponse) ? 211 : 212,
         option: 1,
       });
+
+      if (!this._amCaged && /whichchoice/.test(chewResponse)) {
+        console.log(`Unexpectedly still in a choice after chewing through cage.`);
+        return;
+      }
     } else if (/Pop!/.test(adventureResponse)) {
       await this._client.visitUrl("choice.php", {
         whichchoice: 296,
@@ -513,57 +771,93 @@ export class CageBot {
     this._cageStatus = undefined;
   }
 
-  async advLeft(message: PrivateMessage): Promise<boolean> {
+  async maintainAdventures(message: PrivateMessage): Promise<number> {
     const beforeAdv = await this._client.getAdvs();
 
-    if (beforeAdv > 11) {
-      return true;
+    if (beforeAdv > this._settings.maintainAdventures) {
+      return beforeAdv;
     }
 
     const currentFull = await this._client.getFull();
     const currentDrunk = await this._client.getDrunk();
+    const fullRemaining = 15 - currentFull;
+    const drunkRemaining = this._maxDrunk - currentDrunk;
 
-    if (currentFull >= 15 && currentDrunk >= 14) {
+    if (fullRemaining <= 0 && drunkRemaining <= 0) {
       // have consumed as much as we can for the day and low on adventures
-      return false;
+      return beforeAdv;
     }
 
     const currentLevel = await this._client.getLevel();
-    let itemConsumed = "";
+    const inventory: Map<number, number> = await this._client.getInventory();
+    let itemConsumed;
+    let itemsMissing: string[] = [];
+    let consumeMessage: any;
 
-    if (currentFull <= 9 && currentLevel >= 8) {
-      //eat Fleetwood Mac 'n' Cheese since >= 6 fullness available and sufficient level
-      itemConsumed = "Fleetwood mac 'n' cheese";
-      console.log(`Attempting to eat ${itemConsumed}`);
-      this._client.eat(7215);
-    } else if (currentFull <= 12 && currentLevel >= 7) {
-      //eat Crimbo pie since >= 3 fullness available and sufficient level
-      itemConsumed = "Crimbo pie";
-      console.log(`Attempting to eat ${itemConsumed}`);
-      this._client.eat(2767);
-    } else if (currentDrunk <= 8 && currentLevel >= 11) {
-      //drink Psychotic Train wine since >= 6 drunk available and sufficient level
-      itemConsumed = "Psychotic Train wine";
-      console.log(`Attempting to drink ${itemConsumed}`);
-      this._client.drink(7370);
-    } else if (currentDrunk <= 12) {
-      //drink middle of the road since >= 2 drunk available
-      itemConsumed = "Middle of the Road™ brand whiskey";
-      console.log(`Attempting to drink ${itemConsumed}`);
-      this._client.drink(9948);
+    for (let diet of this._diet) {
+      if (diet.level > currentLevel) {
+        continue;
+      }
+
+      if (diet.fullness > (diet.type == "food" ? fullRemaining : drunkRemaining)) {
+        continue;
+      }
+
+      if ((inventory.get(diet.id) || 0) <= 0) {
+        itemsMissing.push(diet.name);
+        continue;
+      }
+
+      if (diet.type == "food") {
+        console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
+        consumeMessage = await this._client.eat(diet.id);
+      } else {
+        console.log(`Attempting to drink ${diet.name}, of which we have ${inventory.get(diet.id)}`);
+
+        if (this._usingBarrelMimic && this._ownsTuxedo) {
+          const priorShirt = (await this._client.getEquipment()).get("shirt") || 0;
+
+          if (priorShirt != 2489) {
+            await this._client.equip(2489);
+          }
+
+          consumeMessage = this._client.drink(diet.id);
+
+          if (priorShirt > 0 && priorShirt != 2489) {
+            await this._client.equip(priorShirt);
+          }
+        } else {
+          consumeMessage = await this._client.drink(diet.id);
+        }
+      }
+
+      itemConsumed = diet.name;
+      break;
     }
 
     const afterAdv = await this._client.getAdvs();
 
     if (beforeAdv === afterAdv) {
-      console.log(`I am out of ${itemConsumed}.`);
+      if (itemConsumed) {
+        console.log(`Failed to consume ${itemConsumed}.`);
+        console.log(consumeMessage);
+      } else if (this._usingBarrelMimic) {
+        console.log(`I am out of Lil' Barrel Mimic consumables.`);
 
-      this._client.sendPrivateMessage(
-        message.who,
-        `Please tell my operator that I am out of ${itemConsumed}.`
-      );
+        this._client.sendPrivateMessage(
+          message.who,
+          `Please tell my operator that I am out of consumables.`
+        );
+      } else {
+        console.log(`I am out of ${itemsMissing.join(", ")}.`);
+
+        this._client.sendPrivateMessage(
+          message.who,
+          `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
+        );
+      }
     }
 
-    return afterAdv > 11;
+    return afterAdv;
   }
 }

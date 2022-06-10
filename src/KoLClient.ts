@@ -44,6 +44,26 @@ export type KoLClan = {
   id: string;
 };
 
+export type MallResult = {
+  storeId: number;
+  itemId: number;
+  stock: number;
+  limit?: number;
+  price: number;
+};
+
+export type EquipSlot =
+  | "hat"
+  | "shirt"
+  | "pants"
+  | "weapon"
+  | "offhand"
+  | "acc1"
+  | "acc2"
+  | "acc3"
+  | "fakehands"
+  | "cardsleeve";
+
 export class KoLClient {
   private _loginParameters;
   private _credentials?: KOLCredentials;
@@ -77,7 +97,7 @@ export class KoLClient {
       });
       return apiResponse.status === 200;
     } catch {
-      console.log("Login check failed, returning false to be safe.")
+      console.log("Login check failed, returning false to be safe.");
       return false;
     }
   }
@@ -114,19 +134,21 @@ export class KoLClient {
         id: apiResponse.data.playerid,
         name: apiResponse.data.name,
       };
-      return true
+      return true;
     } catch {
-      console.log("Login failed. Checking if it's because of rollover.")
-      await this.rolloverCheck()
-      return false
+      console.log("Login failed. Checking if it's because of rollover.");
+      await this.rolloverCheck();
+      return false;
     }
   }
 
   async rolloverCheck() {
-    this._isRollover = /The system is currently down for nightly maintenance/.test((await axios("https://www.kingdomofloathing.com/")).data);
+    this._isRollover = /The system is currently down for nightly maintenance/.test(
+      (await axios("https://www.kingdomofloathing.com/")).data
+    );
     if (this._isRollover) {
-      console.log("Rollover appears to be in progress. Checking again in one minute.")
-      setTimeout(() => this.rolloverCheck(), 60000)
+      console.log("Rollover appears to be in progress. Checking again in one minute.");
+      setTimeout(() => this.rolloverCheck(), 60000);
     }
   }
 
@@ -135,7 +157,7 @@ export class KoLClient {
     parameters: Record<string, any> = {},
     pwd: Boolean = true
   ): Promise<any> {
-    if (this._isRollover || !await this.logIn()) return null;
+    if (this._isRollover || !(await this.logIn())) return null;
     try {
       const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
         method: "POST",
@@ -166,17 +188,57 @@ export class KoLClient {
   }
 
   async eat(foodID: number): Promise<void> {
-	await this.visitUrl("inv_eat.php", {
-		which: 1,
-		whichitem: foodID,
-	  });
+    await this.visitUrl("inv_eat.php", {
+      which: 1,
+      whichitem: foodID,
+    });
   }
 
-  async drink(drinkID: number): Promise<void> {
-	await this.visitUrl("inv_booze.php", {
-		which: 1,
-		whichitem: drinkID,
-	  });
+  async drink(drinkID: number): Promise<any> {
+    return await this.visitUrl("inv_booze.php", {
+      which: 1,
+      whichitem: drinkID,
+    });
+  }
+
+  async equip(itemId: number): Promise<void> {
+    await this.visitUrl(
+      `inv_equip.php?pwd=${this._credentials?.pwdhash}&which=2&action=equip&whichitem=${itemId}&ajax=1`
+    );
+  }
+
+  async getEquipment(): Promise<Map<EquipSlot, number>> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+
+    const equipment = new Map();
+
+    if (!apiResponse || !apiResponse["equipment"]) {
+      return equipment;
+    }
+
+    const equips = apiResponse["equipment"];
+
+    for (let key of Object.keys(equips)) {
+      equipment.set(key, parseInt(equips[key]));
+    }
+
+    return equipment;
+  }
+
+  async getFamiliar(): Promise<number> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+
+    if (!apiResponse || !apiResponse["familiar"]) {
+      return 0;
+    }
+
+    return parseInt(apiResponse["familiar"]);
   }
 
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
@@ -184,7 +246,7 @@ export class KoLClient {
       j: 1,
       lasttime: this._lastFetchedMessages,
     });
-    if (!newChatMessagesResponse) return []
+    if (!newChatMessagesResponse) return [];
     this._lastFetchedMessages = newChatMessagesResponse["last"];
     const newWhispers: PrivateMessage[] = newChatMessagesResponse["msgs"]
       .filter((msg: KOLMessage) => msg["type"] === "private")
@@ -198,7 +260,7 @@ export class KoLClient {
 
   async getWhitelists(): Promise<KoLClan[]> {
     const clanRecuiterResponse = await this.visitUrl("clan_signup.php");
-    if (!clanRecuiterResponse) return []
+    if (!clanRecuiterResponse) return [];
     const clanIds = select(
       '//select[@name="whichclan"]/option/@value',
       parser.parseFromString(clanRecuiterResponse, "text/xml")
@@ -244,6 +306,34 @@ export class KoLClient {
     return 0;
   }
 
+  async getMeat(): Promise<number> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "status",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+    if (apiResponse) return parseInt(apiResponse["meat"], 10);
+    return 0;
+  }
+
+  async getInventory(): Promise<Map<number, number>> {
+    const apiResponse = await this.visitUrl("api.php", {
+      what: "inventory",
+      for: "Cagesitter (Maintained by Phillammon)",
+    });
+
+    const map: Map<number, number> = new Map();
+
+    if (!apiResponse) {
+      return map;
+    }
+
+    for (let key of Object.keys(apiResponse)) {
+      map.set(parseInt(key), parseInt(apiResponse[key]));
+    }
+
+    return map;
+  }
+
   async getFull(): Promise<number> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "status",
@@ -271,5 +361,77 @@ export class KoLClient {
     return 0;
   }
 
-  
+  async createMacro(name: string, macro: string): Promise<void> {
+    await this.visitUrl("account_combatmacros.php", {
+      macroid: "0",
+      name: name,
+      macrotext: macro,
+      action: "save",
+    });
+  }
+
+  async searchMall(itemName: string): Promise<MallResult[]> {
+    const apiResponse = (await this.visitUrl(
+      `mall.php?justitems=0&pudnuggler="${encodeURI(itemName)}"`
+    )) as string;
+
+    const matches = apiResponse.matchAll(
+      /href="mallstore\.php\?whichstore=(\d+)&searchitem=(\d+)&searchprice=(\d+)"><b>.+?"small stock">([\d,]+)<\/td>.*?<td class="small">(?:(\d+)&nbsp;\/&nbsp;day&nbsp;&nbsp;&nbsp;<\/td>)?/
+    );
+
+    let results: MallResult[] = [];
+
+    for (let result of matches) {
+      const storeId = parseInt(result[0]);
+      const itemId = parseInt(result[1]);
+      const price = parseInt(result[2]);
+      const stockLevel = parseInt(result[3].replaceAll(",", ""));
+      const limit = result[4] == null ? undefined : parseInt(result[4].replaceAll(",", ""));
+
+      results.push({
+        storeId: storeId,
+        itemId: itemId,
+        price: price,
+        stock: stockLevel,
+        limit: limit,
+      });
+    }
+
+    return results;
+  }
+
+  async buyMall(mallResult: MallResult, amount: number): Promise<void> {
+    let itemId = mallResult.price.toString();
+
+    // Pad with zeros
+    while (itemId.length < 9) {
+      itemId = "0" + itemId;
+    }
+
+    itemId = mallResult.itemId + itemId;
+
+    await this.visitUrl(
+      `mallstore.php?buying=1&quantity=${amount}&whichitem=${itemId}&ajax=1&pwd=${this._credentials?.pwdhash}&whichstore=${mallResult.storeId}`
+    );
+  }
+
+  async buyFromNPC(shopName: string, row: number, amount: number): Promise<void> {
+    await this.visitUrl(
+      `shop.php?whichshop=${shopName}&action=buyitem&quantity=${amount}&whichrow=${row}&pwd=${this._credentials?.pwdhash}`
+    );
+  }
+
+  async multiUse(item: number, amount: number): Promise<void> {
+    await this.visitUrl(
+      `multiuse.php?whichitem=${item}&action=useitem&ajax=1&quantity=${amount}&pwd=${this._credentials?.pwdhash}`
+    );
+  }
+
+  async buyFromHermit(item: number, amount: number): Promise<void> {
+    await this.visitUrl("hermit.php", {
+      action: "trade",
+      whichitem: item,
+      quantity: amount,
+    });
+  }
 }

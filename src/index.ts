@@ -23,7 +23,9 @@ console.log("  package.json). This file should be in the form:");
 console.log();
 console.log("  KOL_USER='Cagebot'");
 console.log("  KOL_PASS='Cagebot P4ssw0rD'");
+console.log("  MAINTAIN_ADVENTURES='80'");
 console.log("  OPEN_EVERYTHING='true/false'");
+console.log("  ONLY_OPEN_WHEN_ADVS_ABOVE='80'");
 console.log();
 console.log();
 console.log("INGAME SETUP");
@@ -51,10 +53,12 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
   console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 } else {
-  const cageBot = new CageBot(
-    process.env.KOL_USER,
-    process.env.KOL_PASS,
-    process.env.OPEN_EVERYTHING === "true"
-  );
+  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, {
+    maintainAdventures: parseInt(process.env.MAINTAIN_ADVENTURES || "80"),
+    openEverything: process.env.OPEN_EVERYTHING === "true",
+    openEverythingWhileAdventuresAbove: parseInt(
+      process.env.DONT_OPEN_EVERYTHING_WHEN_ADVS_BELOW || "80"
+    ),
+  });
   cageBot.start();
 }
