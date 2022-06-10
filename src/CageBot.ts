@@ -397,7 +397,7 @@ export class CageBot {
     let totalTurnsSpent: number = 0;
     let failedToMaintain = false;
 
-    const escapeCageToOpenGratesAndValues: () => boolean = () => {
+    const escapeCageToOpenGratesAndValves: () => boolean = () => {
       if (!this._settings.openEverything) {
         return false;
       }
@@ -411,7 +411,7 @@ export class CageBot {
       }
 
       if (gratesOpened + gratesFoundOpen >= 20 && valvesTwisted + valvesFoundTwisted < 20) {
-        // Only if we have a large surplus of adventures, do we burn turns on values when grates are done.
+        // Only if we have a large surplus of adventures, do we burn turns on valves when grates are done.
         if (currentAdventures - estimatedTurnsSpent > 160) {
           return true;
         }
@@ -468,7 +468,7 @@ export class CageBot {
           option: 2,
         });
 
-        if (escapeCageToOpenGratesAndValues()) {
+        if (escapeCageToOpenGratesAndValves()) {
           await this.chewOut();
           estimatedTurnsSpent += 10;
         } else {
@@ -573,7 +573,7 @@ export class CageBot {
         message.who,
         `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
           valvesTwisted + valvesFoundTwisted
-        } / 20 values twisted`
+        } / 20 valves twisted`
       );
     }
   }
@@ -706,7 +706,7 @@ export class CageBot {
       );
     }
     //always send info on how full the bot is.
-    //todo: assumes max values. Should check for actual
+    //todo: assumes max valves. Should check for actual
     await this._client.sendPrivateMessage(
       message.who,
       `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/${
