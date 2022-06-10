@@ -53,6 +53,9 @@ export class CageBot {
 
     this.initialSetup().then(() => {
       console.log("Initial setup complete. Polling messages.");
+      // Register us as in chat, so we don't get logged out.
+      this._client.visitUrl("mchat.php");
+
       setInterval(
         async () => this._privateMessages.push(...(await this._client.fetchNewWhispers())),
         3000
