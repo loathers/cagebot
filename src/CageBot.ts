@@ -34,6 +34,7 @@ export class CageBot {
   private _ownsTuxedo: boolean = false;
   private _usingBarrelMimic: boolean = false;
   private _doneInitialSetup: boolean = false;
+  private _lastKeepAlive: number = Date.now() / 1000;
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -54,18 +55,49 @@ export class CageBot {
     this.initialSetup().then(() => {
       console.log("Initial setup complete. Polling messages.");
 
-      setInterval(
-        async () => this._privateMessages.push(...(await this._client.fetchNewWhispers())),
-        3000
-      );
+      setInterval(async () => {
+        // Every 15 minutes, visit main.php to ensure we don't get logged out
+        if (this._lastKeepAlive + 15 * 60 < Date.now() / 1000) {
+          await this.doKeepAlive();
+        }
+
+        this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+      }, 3000);
       this.processMessage();
     });
   }
 
-  async initialSetup(): Promise<void> {
-    this._amCaged = /Despite All Your Rage/.test(await this._client.visitUrl("place.php"));
+  setKeepAlive() {
+    this._lastKeepAlive = Date.now() / 1000;
+  }
+
+  async doKeepAlive(): Promise<void> {
+    this.setKeepAlive();
+
+    await this.testCaged();
+  }
+
+  async testCaged(): Promise<void> {
+    let page = await this._client.visitUrl("place.php");
+
+    if (/Pop!/.test(page)) {
+      page = await this._client.visitUrl("choice.php", {
+        whichchoice: 296,
+        option: 1,
+      });
+    }
+
+    this._amCaged = /Despite All Your Rage/.test(page);
 
     if (!this._amCaged) {
+      this._cageStatus = undefined;
+    }
+  }
+
+  async initialSetup(): Promise<void> {
+    await this.testCaged();
+
+    if (!this._amCaged && !this._doneInitialSetup) {
       if (!/CAGEBOT/.test(await this._client.visitUrl("account_combatmacros.php"))) {
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
@@ -328,6 +360,8 @@ export class CageBot {
   }
 
   async becomeCaged(message: PrivateMessage): Promise<void> {
+    this.setKeepAlive();
+
     const clanName = message.msg.slice(5);
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
 
@@ -397,6 +431,12 @@ export class CageBot {
     let estimatedTurnsSpent: number = 0;
     let totalTurnsSpent: number = 0;
     let failedToMaintain = false;
+
+    if (this._settings.openEverything) {
+      console.log(
+        `${targetClan.name} has ${gratesFoundOpen} grates already opened, ${valvesFoundTwisted} valves already twisted`
+      );
+    }
 
     const escapeCageToOpenGratesAndValves: () => boolean = () => {
       if (!this._settings.openEverything) {
@@ -472,6 +512,7 @@ export class CageBot {
         if (escapeCageToOpenGratesAndValves()) {
           await this.chewOut();
           estimatedTurnsSpent += 10;
+          console.log(`Escaping cage to continue opening grates and twisting valves!`);
         } else {
           console.log(`Caged!`);
         }
@@ -568,8 +609,13 @@ export class CageBot {
         spentAdvs === 1 ? "" : "s"
       } (${endAdvs} remaining).`
     );
+    console.log(
+      `They have ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
+        valvesTwisted + valvesFoundTwisted
+      } / 20 valves twisted`
+    );
 
-    if (this._settings.openEverything && (gratesOpened > 0 || valvesTwisted > 0)) {
+    if (gratesOpened > 0 || valvesTwisted > 0) {
       await this._client.sendPrivateMessage(
         message.who,
         `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
@@ -746,6 +792,8 @@ export class CageBot {
   }
 
   async chewOut(): Promise<void> {
+    this.setKeepAlive();
+
     const adventureResponse = await this._client.visitUrl("adventure.php", {
       snarfblat: 166,
     });
