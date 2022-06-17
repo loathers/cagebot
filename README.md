@@ -44,25 +44,49 @@ package.json). This file should be in the form:
   ONLY_OPEN_WHEN_ADVS_ABOVE='80'
 ```
 
-## INGAME SETUP
+## AUTOATTACK MACRO
 
-To set up your multi, please have it idle with as much +adv rollover gear
-on as possible, amd at least 1 hp regen/fight. Whatsian Ionic Pliers in
-the offhand are recommended as a cheap and plentiful option for this.
+You will require an autoattack with the name CAGEBOT (all caps) that at the minimum, reads runaway;repeat
 
-You will also require an autoattack with the name CAGEBOT (all caps) that
-reads "runaway;repeat". If your account has means of running freely,
-feel free to add them too, but I take no responsibility for failures.
+The CombatMacro.txt included in this project has a combat macro you're recommended to use, especially if you're going for the complicated setup.
+
+If your account has means of running freely, feel free to add them too, but I take no responsibility for failures.
 If you need to tiebreak equipment, +noncombat rate is nice too.
 
-For the diet, you have two choices. The first is to have Lil' Barrel Mimic as your
-active familiar, regenerate at least 10 MP/fight and to have the cleesh skill. You can then
-modify your autoattack to both Cleesh, then defeat the monsters.
+## INGAME SETUP COMPLICATED
 
-This lets the script maintain its own diet. If you do this, pick up a Tuxedo Shirt for
-extra adventure gains when drinking.
+This takes longer to setup, but is more rewarding as the bot can become fully self sustaining.
+This is also the recommended setup if you set the bot to open all grates and valves.
 
-Optionally manually stock bot with the items below for consumption.
+The minimum here is to grab the familiar Lil' Barrel Mimic, regenerate at least 10 MP/fight, and to have the cleesh skill.
+This requires level 9 at minumum.
+
+You then have the option to run -combat gear, this is optional but is great for opening grates and valves while trying to be caged.
+It is also extremely recommended, if you're enabling the option to open everything. You'll run into issues if you don't run some source of -combat.
+
+To raise initial funds, you could use farm 11-leaf clovers from the Hermit, and send them to sellbot.
+For MP Regeneration, an easy source is nurse's hat for 10-15.
+
+Combat %, three accessories are: Bram's Choker, Ring of Conflict, Red Shoe
+Weapon: Rusted-out Shooting' Iron
+
+The last piece of equipment isn't so easy, the best solution here would be acquiring the shirt or pants from the outfit Xiblaxian Stealth Suit.
+This however will take a few hundred thousand meat at minimum.
+
+You will also want to pick up a Tuxedo Shirt for more adventures from booze.
+
+And finally, you want to get as much +adv as you can.
+A clockwork maid, and perhaps a pagoda. Equipment wise, you have the offhand 'ancient calendar', and shirt 'Shoe Ad T-Shirt'
+
+Don't forget to setup the autoattack macro!
+
+## INGAME SETUP SIMPLE
+
+To set up your multi, please have it idle with as much +adv rollover gear
+on as possible, and at least 1 hp regen/fight. Whatsian Ionic Pliers in
+the offhand are recommended as a cheap and plentiful option for this.
+
+Manually stock bot with the items below for consumption.
 Bot must be at least the associated level to consume these items.
 Currently bot will not buy these, only uses from inventory.
 
