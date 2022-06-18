@@ -70,6 +70,7 @@ export class KoLClient {
   private _lastFetchedMessages: string = "0";
   private _player?: KoLUser;
   private _isRollover: boolean = false;
+  private _rolloverAt?: number;
 
   constructor(username: string, password: string) {
     this._loginParameters = new URLSearchParams();
@@ -80,8 +81,30 @@ export class KoLClient {
     this._loginParameters.append("submitbutton", "Log In");
   }
 
+  async getSecondsToRollover(): Promise<number> {
+    if (this._isRollover) {
+      return 0;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // If rollover has not been set, or it's claiming it's expired
+    if (this._rolloverAt == undefined || this._rolloverAt <= now) {
+      this._rolloverAt = undefined;
+
+      await this.loggedIn();
+    }
+
+    if (this._rolloverAt === undefined) {
+      return 0;
+    }
+
+    return this._rolloverAt - now;
+  }
+
   async loggedIn(): Promise<boolean> {
-    if (!this._credentials) return false;
+    if (!this._credentials || this._isRollover) return false;
+
     try {
       const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
         maxRedirects: 0,
@@ -95,7 +118,13 @@ export class KoLClient {
         },
         validateStatus: (status) => status === 302 || status === 200,
       });
-      return apiResponse.status === 200;
+
+      if (apiResponse.status === 200) {
+        this._rolloverAt = parseInt(apiResponse.data["rollover"]);
+        return true;
+      }
+
+      return false;
     } catch {
       console.log("Login check failed, returning false to be safe.");
       return false;
@@ -156,7 +185,10 @@ export class KoLClient {
     parameters: Record<string, any> = {},
     pwd: Boolean = true
   ): Promise<any> {
-    if (this._isRollover || !(await this.logIn())) return null;
+    if (this._isRollover || (await this.getSecondsToRollover()) <= 1) {
+      return null;
+    }
+
     try {
       const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
         method: "POST",
@@ -241,19 +273,28 @@ export class KoLClient {
   }
 
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
+    if (this._isRollover || !(await this.logIn())) {
+      return [];
+    }
+
     const newChatMessagesResponse = await this.visitUrl("newchatmessages.php", {
       j: 1,
       lasttime: this._lastFetchedMessages,
     });
+
     if (!newChatMessagesResponse) return [];
+
     this._lastFetchedMessages = newChatMessagesResponse["last"];
+
     const newWhispers: PrivateMessage[] = newChatMessagesResponse["msgs"]
       .filter((msg: KOLMessage) => msg["type"] === "private")
       .map((msg: KOLMessage) => ({
         who: msg.who,
         msg: msg.msg,
       }));
+
     newWhispers.forEach(({ who }) => this.sendPrivateMessage(who, "Message acknowledged."));
+
     return newWhispers;
   }
 

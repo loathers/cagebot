@@ -52,19 +52,24 @@ export class CageBot {
       );
     }
 
-    this.initialSetup().then(() => {
-      console.log("Initial setup complete. Polling messages.");
+    this._client.logIn().then(() =>
+      this.initialSetup().then(async () => {
+        const secondsToRollover = await this._client.getSecondsToRollover();
 
-      setInterval(async () => {
-        // Every 15 minutes, visit main.php to check if we're still caged.
-        if (this._lastTestCage + 15 * 60 < Date.now() / 1000) {
-          await this.testCaged();
-        }
+        console.log("The next rollover is in " + this.humanReadableTime(secondsToRollover));
+        console.log("Initial setup complete. Polling messages.");
 
-        this._privateMessages.push(...(await this._client.fetchNewWhispers()));
-      }, 3000);
-      this.processMessage();
-    });
+        setInterval(async () => {
+          // Every 15 minutes, visit main.php to check if we're still caged.
+          if (this._lastTestCage + 15 * 60 < Date.now() / 1000) {
+            await this.testCaged();
+          }
+
+          this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+        }, 3000);
+        this.processMessage();
+      })
+    );
   }
 
   async testCaged(): Promise<void> {
