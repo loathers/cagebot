@@ -104,7 +104,17 @@ export class KoLClient {
 
   async logIn(): Promise<boolean> {
     if (await this.loggedIn()) return true;
-    if (this._isRollover) return false;
+
+    this._isRollover = /The system is currently down for nightly maintenance/.test(
+      (await axios("https://www.kingdomofloathing.com/")).data
+    );
+
+    if (this._isRollover) {
+      console.log("Rollover appears to be in progress. Checking again in one minute.");
+      setTimeout(() => this.logIn(), 60000);
+      return false;
+    }
+
     console.log(`Not logged in. Logging in as ${this._loginParameters.get("loginname")}`);
     try {
       const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
@@ -136,19 +146,8 @@ export class KoLClient {
       };
       return true;
     } catch {
-      console.log("Login failed. Checking if it's because of rollover.");
-      await this.rolloverCheck();
+      console.log("Login failed..");
       return false;
-    }
-  }
-
-  async rolloverCheck() {
-    this._isRollover = /The system is currently down for nightly maintenance/.test(
-      (await axios("https://www.kingdomofloathing.com/")).data
-    );
-    if (this._isRollover) {
-      console.log("Rollover appears to be in progress. Checking again in one minute.");
-      setTimeout(() => this.rolloverCheck(), 60000);
     }
   }
 

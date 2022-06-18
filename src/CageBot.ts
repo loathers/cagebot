@@ -34,7 +34,7 @@ export class CageBot {
   private _ownsTuxedo: boolean = false;
   private _usingBarrelMimic: boolean = false;
   private _doneInitialSetup: boolean = false;
-  private _lastKeepAlive: number = Date.now() / 1000;
+  private _lastTestCage: number = Date.now() / 1000;
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -56,9 +56,9 @@ export class CageBot {
       console.log("Initial setup complete. Polling messages.");
 
       setInterval(async () => {
-        // Every 15 minutes, visit main.php to ensure we don't get logged out
-        if (this._lastKeepAlive + 15 * 60 < Date.now() / 1000) {
-          await this.doKeepAlive();
+        // Every 15 minutes, visit main.php to check if we're still caged.
+        if (this._lastTestCage + 15 * 60 < Date.now() / 1000) {
+          await this.testCaged();
         }
 
         this._privateMessages.push(...(await this._client.fetchNewWhispers()));
@@ -67,17 +67,8 @@ export class CageBot {
     });
   }
 
-  setKeepAlive() {
-    this._lastKeepAlive = Date.now() / 1000;
-  }
-
-  async doKeepAlive(): Promise<void> {
-    this.setKeepAlive();
-
-    await this.testCaged();
-  }
-
   async testCaged(): Promise<void> {
+    this._lastTestCage = Date.now() / 1000;
     let page = await this._client.visitUrl("place.php");
 
     if (/Pop!/.test(page)) {
@@ -360,7 +351,7 @@ export class CageBot {
   }
 
   async becomeCaged(message: PrivateMessage): Promise<void> {
-    this.setKeepAlive();
+    await this.testCaged();
 
     const clanName = message.msg.slice(5);
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
@@ -792,7 +783,7 @@ export class CageBot {
   }
 
   async chewOut(): Promise<void> {
-    this.setKeepAlive();
+    await this.testCaged();
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {
       snarfblat: 166,
