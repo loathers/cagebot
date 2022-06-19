@@ -134,6 +134,7 @@ export class KoLClient {
   async logIn(): Promise<boolean> {
     if (await this.loggedIn()) return true;
 
+    this._credentials = undefined;
     this._isRollover = /The system is currently down for nightly maintenance/.test(
       (await axios("https://www.kingdomofloathing.com/")).data
     );
@@ -201,6 +202,33 @@ export class KoLClient {
           ...parameters,
         },
       });
+
+      if (page.headers["set-cookie"] && this._credentials != null) {
+        const cookies: any = {};
+
+        for (let [name, cookie] of this._credentials.sessionCookies
+          .split("; ")
+          .map((s) => s.split("="))) {
+          if (!cookie) {
+            continue;
+          }
+
+          cookies[name] = cookie;
+        }
+
+        const sessionCookies = page.headers["set-cookie"].map((cookie: string) =>
+          cookie.split(";")[0].trim().split("=")
+        );
+
+        for (let [name, cookie] of sessionCookies) {
+          cookies[name] = cookie;
+        }
+
+        this._credentials.sessionCookies = Object.entries(cookies)
+          .map(([key, value]) => key + "=" + value)
+          .join("; ");
+      }
+
       return page.data;
     } catch {
       return null;

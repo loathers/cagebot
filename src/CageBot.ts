@@ -139,6 +139,8 @@ export class CageBot {
         } else {
           this.fillDietData();
         }
+
+        await this.maintainAdventures();
       }
 
       this._doneInitialSetup = true;
@@ -357,6 +359,17 @@ export class CageBot {
 
   async becomeCaged(message: PrivateMessage): Promise<void> {
     await this.testCaged();
+
+    // If rollover is less than 7 minutes away
+    if ((await this._client.getSecondsToRollover()) < 7 * 60) {
+      this._client.sendPrivateMessage(
+        message.who,
+        `Rollover is in ${this.humanReadableTime(
+          await this._client.getSecondsToRollover()
+        )}, I do not wish to get into a bad state. Please try again after rollover.`
+      );
+      return;
+    }
 
     const clanName = message.msg.slice(5);
     console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
@@ -814,9 +827,10 @@ export class CageBot {
 
     this._amCaged = false;
     this._cageStatus = undefined;
+    await this.maintainAdventures();
   }
 
-  async maintainAdventures(message: PrivateMessage): Promise<number> {
+  async maintainAdventures(message?: PrivateMessage): Promise<number> {
     const beforeAdv = await this._client.getAdvs();
 
     if (beforeAdv > this._settings.maintainAdventures) {
@@ -889,17 +903,21 @@ export class CageBot {
       } else if (this._usingBarrelMimic) {
         console.log(`I am out of Lil' Barrel Mimic consumables.`);
 
-        this._client.sendPrivateMessage(
-          message.who,
-          `Please tell my operator that I am out of consumables.`
-        );
+        if (message !== undefined) {
+          this._client.sendPrivateMessage(
+            message.who,
+            `Please tell my operator that I am out of consumables.`
+          );
+        }
       } else {
         console.log(`I am out of ${itemsMissing.join(", ")}.`);
 
-        this._client.sendPrivateMessage(
-          message.who,
-          `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
-        );
+        if (message !== undefined) {
+          this._client.sendPrivateMessage(
+            message.who,
+            `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
+          );
+        }
       }
     }
 
