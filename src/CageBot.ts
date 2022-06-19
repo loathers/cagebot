@@ -15,6 +15,19 @@ type Diet = {
   fullness: number;
 };
 
+type JsonStatus = {
+  adventures: number; // Adventures remaining
+  full: number; // Current fullness used
+  fullLimit?: number; // Max fullness, absent if we don't know
+  liver: number; // Current liver used
+  liverLimit?: number; // Max liver, absent if we don't know
+  caged: boolean; // If currently caged
+  cagedBy?: string; // Who requested the cage, absent if we don't know
+  cagedClan?: string; // Clan we're trapped in, absent if not caged or we don't know
+  cagedFor?: number; // Seconds in cage, absent if we don't know or not caged
+  releasable?: boolean; // If the requester can release, absent if not caged
+};
+
 export type Settings = {
   maintainAdventures: number;
   openEverything: boolean;
@@ -43,12 +56,13 @@ export class CageBot {
 
   start(): void {
     console.log("Starting Cagebot...");
+    console.log("We're trying to maintain " + this._settings.maintainAdventures + " adventures");
 
     if (this._settings.openEverything) {
       console.log(
         "While adventures are above " +
           this._settings.openEverythingWhileAdventuresAbove +
-          ", we're escaping the cage to open grates and valves."
+          ", we're escaping the cage to open grates and twist valves."
       );
     }
 
@@ -90,6 +104,21 @@ export class CageBot {
     }
   }
 
+  async sendJsonStatus(message: PrivateMessage) {
+    const status = {
+      full: 0,
+      fullLimit: 15,
+      liver: 0,
+      liverLimit: 15,
+      releasable: false,
+      caged: false,
+      cagedBy: "Me",
+      cagedClan: "No idea",
+      cagedFor: 500,
+      adventures: 43,
+    };
+  }
+
   async initialSetup(): Promise<void> {
     await this.testCaged();
 
@@ -106,44 +135,46 @@ export class CageBot {
         console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
         console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         throw "Macro required to continue.";
-      } else {
-        const combatTab = await this._client.visitUrl("account.php", {
-          tab: "combat",
-        });
-        const macroId = combatTab.match(/value="(\d+)">CAGEBOT/)[1];
-        await this._client.visitUrl("account.php", {
-          am: 1,
-          action: "flag_aabosses",
-          value: 1,
-          ajax: 1,
-        });
-        await this._client.visitUrl("account.php", {
-          am: 1,
-          action: "autoattack",
-          value: macroId,
-          ajax: 1,
-        });
+      }
 
-        if (/>Liver of Steel<\/a>/.test(await this._client.visitUrl("charsheet.php"))) {
-          this._maxDrunk = 19;
-        }
+      const combatTab = await this._client.visitUrl("account.php", {
+        tab: "combat",
+      });
+      const macroId = combatTab.match(/value="(\d+)">CAGEBOT/)[1];
+      await this._client.visitUrl("account.php", {
+        am: 1,
+        action: "flag_aabosses",
+        value: 1,
+        ajax: 1,
+      });
+      await this._client.visitUrl("account.php", {
+        am: 1,
+        action: "autoattack",
+        value: macroId,
+        ajax: 1,
+      });
 
-        this._ownsTuxedo =
-          (await this._client.getInventory()).has(2489) ||
-          (await this._client.getEquipment()).get("shirt") == 2489;
-
-        this._usingBarrelMimic = (await this._client.getFamiliar()) == 198;
-
-        if (this._usingBarrelMimic) {
-          this.fillLilBarrelDietData();
-        } else {
-          this.fillDietData();
-        }
-
-        await this.maintainAdventures();
+      if (/>Liver of Steel<\/a>/.test(await this._client.visitUrl("charsheet.php"))) {
+        this._maxDrunk = 19;
       }
 
       this._doneInitialSetup = true;
+    }
+
+    this._ownsTuxedo =
+      (await this._client.getInventory()).has(2489) ||
+      (await this._client.getEquipment()).get("shirt") == 2489;
+
+    this._usingBarrelMimic = (await this._client.getFamiliar()) == 198;
+
+    if (this._usingBarrelMimic) {
+      this.fillLilBarrelDietData();
+    } else {
+      this.fillDietData();
+    }
+
+    if (!this._amCaged) {
+      await this.maintainAdventures();
     }
   }
 
@@ -203,6 +234,26 @@ export class CageBot {
     });
 
     // Good
+    for (let [name, drinkId] of [
+      ["Roll in the hay", 679],
+      ["Slap and Tickle", 680],
+      ["Slip 'n' slide", 681],
+      ["A little sump'm sump'm", 682],
+      ["Pink pony", 684],
+      ["Rockin' wagon", 797],
+      ["Fuzzbump", 799],
+      ["Calle de miel", 1018],
+    ]) {
+      this._diet.push({
+        type: "drink",
+        id: drinkId as number,
+        name: name as string,
+        level: 4,
+        fullness: 4,
+      });
+    }
+
+    // Good
     this._diet.push({
       type: "food",
       id: 318,
@@ -224,6 +275,24 @@ export class CageBot {
       level: 3,
       fullness: 3,
     });
+
+    // Good
+    for (let [name, drinkId] of [
+      ["Gin and tonic", 1567],
+      ["Gibson", 1570],
+      ["Vodka and tonic", 1568],
+      ["Mimosette", 1564],
+      ["Tequila sunset", 1565],
+      ["Zmobie", 1566],
+    ]) {
+      this._diet.push({
+        type: "drink",
+        id: drinkId as number,
+        name: name as string,
+        level: 3,
+        fullness: 3,
+      });
+    }
 
     // Decent
     this._diet.push({
@@ -247,44 +316,6 @@ export class CageBot {
       level: 1,
       fullness: 3,
     });
-
-    // Good
-    for (let [name, drinkId] of [
-      ["Roll in the hay", 679],
-      ["Slap and Tickle", 680],
-      ["Slip 'n' slide", 681],
-      ["A little sump'm sump'm", 682],
-      ["Pink pony", 684],
-      ["Rockin' wagon", 797],
-      ["Fuzzbump", 799],
-      ["Calle de miel", 1018],
-    ]) {
-      this._diet.push({
-        type: "drink",
-        id: drinkId as number,
-        name: name as string,
-        level: 4,
-        fullness: 4,
-      });
-    }
-
-    // Good
-    for (let [name, drinkId] of [
-      ["Gin and tonic", 1567],
-      ["Gibson", 1570],
-      ["Vodka and tonic", 1568],
-      ["Mimosette", 1564],
-      ["Tequila sunset", 1565],
-      ["Zmobie", 1566],
-    ]) {
-      this._diet.push({
-        type: "drink",
-        id: drinkId as number,
-        name: name as string,
-        level: 3,
-        fullness: 3,
-      });
-    }
 
     // Decent
     for (let [name, drinkId] of [
@@ -323,6 +354,8 @@ export class CageBot {
           await this.releaseCage(message);
         } else if (processedMsg.startsWith("help")) {
           await this.helpText(message);
+        } else if (processedMsg.startsWith("diet")) {
+          await this.sendDietReport(message);
         } else {
           await this.didntUnderstand(message);
         }
@@ -332,6 +365,29 @@ export class CageBot {
     } else {
       setTimeout(() => this.processMessage(), 1000);
     }
+  }
+
+  async sendDietReport(message: PrivateMessage) {
+    const inventory: Map<number, number> = await this._client.getInventory();
+    let food: number = 0;
+    let drink: number = 0;
+
+    for (let diet of this._diet) {
+      if (!inventory.has(diet.id)) {
+        continue;
+      }
+
+      if (diet.type == "food") {
+        food += inventory.get(diet.id) || 0;
+      } else {
+        drink += inventory.get(diet.id) || 0;
+      }
+    }
+
+    await this._client.sendPrivateMessage(
+      message.who,
+      `We have ${food} sticks of bread, ${drink} barrels of booze`
+    );
   }
 
   async readGratesAndValves(): Promise<[number, number]> {
@@ -362,7 +418,7 @@ export class CageBot {
 
     // If rollover is less than 7 minutes away
     if ((await this._client.getSecondsToRollover()) < 7 * 60) {
-      this._client.sendPrivateMessage(
+      await this._client.sendPrivateMessage(
         message.who,
         `Rollover is in ${this.humanReadableTime(
           await this._client.getSecondsToRollover()
@@ -457,6 +513,10 @@ export class CageBot {
         currentAdventures - estimatedTurnsSpent <=
         this._settings.openEverythingWhileAdventuresAbove
       ) {
+        if (gratesOpened + gratesFoundOpen < 20) {
+          console.log("We don't have enough adventures, so we're not escaping the cage.");
+        }
+
         return false;
       }
 
@@ -500,8 +560,14 @@ export class CageBot {
           currentDrunk = await this._client.getDrunk();
 
           // If the adventures remaining are at, or less than our estimated adventures remaining. Then we failed to maintain our diet.
-          failedToMaintain = adventuresAtm <= adventuresRemaining;
+          failedToMaintain = adventuresAtm >= adventuresRemaining;
           currentAdventures = adventuresRemaining;
+
+          if (failedToMaintain) {
+            console.log(
+              "We failed to maintain our diet while adventuring in the sewers, will not attempt to maintain again."
+            );
+          }
         }
       }
 
@@ -511,6 +577,7 @@ export class CageBot {
         snarfblat: 166,
       });
       if (/Despite All Your Rage/.test(adventureResponse)) {
+        estimatedTurnsSpent--;
         this._amCaged = true;
 
         await this._client.visitUrl("choice.php", {

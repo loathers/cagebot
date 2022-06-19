@@ -135,12 +135,21 @@ export class KoLClient {
     if (await this.loggedIn()) return true;
 
     this._credentials = undefined;
-    this._isRollover = /The system is currently down for nightly maintenance/.test(
-      (await axios("https://www.kingdomofloathing.com/")).data
-    );
+
+    try {
+      this._isRollover = /The system is currently down for nightly maintenance/.test(
+        (await axios("https://www.kingdomofloathing.com/")).data
+      );
+
+      if (this._isRollover) {
+        console.log("Rollover appears to be in progress. Checking again in one minute.");
+      }
+    } catch {
+      this._isRollover = true;
+      console.log("Login failed.. Rollover? Checking again in one minute.");
+    }
 
     if (this._isRollover) {
-      console.log("Rollover appears to be in progress. Checking again in one minute.");
       setTimeout(() => this.logIn(), 60000);
       return false;
     }
