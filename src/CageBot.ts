@@ -20,7 +20,7 @@ type JsonStatus = {
   full: number; // Current fullness used
   maxFull: number; // Max fullness, absent if we don't know
   liver: number; // Current liver used
-  maxLiver: number; // Max liver, absent if we don't know
+  maxLiver?: number; // Max liver, absent if we don't know
   caged: boolean; // If currently caged
   cagedBy?: number; // Who requested the cage, absent if we don't know
   cagedClan?: number; // Clan we're trapped in, absent if not caged or we don't know
@@ -43,7 +43,7 @@ export class CageBot {
   private _cageStatus?: CagedStatus;
   private _settings: Settings;
   private _diet: Diet[] = [];
-  private _maxDrunk: number = 14;
+  private _maxDrunk?: number;
   private _ownsTuxedo: boolean = false;
   private _usingBarrelMimic: boolean = false;
   private _doneInitialSetup: boolean = false;
@@ -104,21 +104,6 @@ export class CageBot {
     }
   }
 
-  async sendJsonStatus(message: PrivateMessage) {
-    const status = {
-      full: 0,
-      fullLimit: 15,
-      liver: 0,
-      liverLimit: 15,
-      releasable: false,
-      caged: false,
-      cagedBy: "Me",
-      cagedClan: "No idea",
-      cagedFor: 500,
-      adventures: 43,
-    };
-  }
-
   async initialSetup(): Promise<void> {
     await this.testCaged();
 
@@ -156,6 +141,8 @@ export class CageBot {
 
       if (/>Liver of Steel<\/a>/.test(await this._client.visitUrl("charsheet.php"))) {
         this._maxDrunk = 19;
+      } else {
+        this._maxDrunk = 14;
       }
 
       this._doneInitialSetup = true;
@@ -516,6 +503,7 @@ export class CageBot {
   async attemptCage(message: PrivateMessage, targetClan: KoLClan): Promise<void> {
     let gratesOpened = 0;
     let valvesTwisted = 0;
+    let timesChewedOut = 0;
     const [gratesFoundOpen, valvesFoundTwisted]: [number, number] = this._settings.openEverything
       ? await this.readGratesAndValves()
       : [0, 0];
@@ -568,7 +556,7 @@ export class CageBot {
     while (
       !this._amCaged &&
       currentAdventures - estimatedTurnsSpent > 11 &&
-      currentDrunk <= this._maxDrunk
+      currentDrunk <= (this._maxDrunk || 14)
     ) {
       // If we haven't failed to maintain our adventures yet
       if (!failedToMaintain) {
@@ -616,6 +604,7 @@ export class CageBot {
         if (escapeCageToOpenGratesAndValves()) {
           await this.chewOut();
           estimatedTurnsSpent += 10;
+          timesChewedOut++;
           console.log(`Escaping cage to continue opening grates and twisting valves!`);
         } else {
           console.log(`Caged!`);
@@ -718,16 +707,15 @@ export class CageBot {
       message.who,
       `I opened ${gratesOpened} grate${
         gratesOpened === 1 ? "" : "s"
-      } and turned ${valvesTwisted} valve${
-        valvesTwisted === 1 ? "" : "s"
-      } on the way, and spent ${spentAdvs} adventure${
-        spentAdvs === 1 ? "" : "s"
-      } (${endAdvs} remaining).`
+      } and turned ${valvesTwisted} valve${valvesTwisted === 1 ? "" : "s"} on the way,${
+        timesChewedOut > 0 ? ` caged yet escaped ${timesChewedOut} times,` : ``
+      } and spent ${spentAdvs} adventure${spentAdvs === 1 ? "" : "s"} (${endAdvs} remaining).`
     );
+
     console.log(
       `They have ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
         valvesTwisted + valvesFoundTwisted
-      } / 20 valves twisted`
+      } / 20 valves twisted.`
     );
 
     if (gratesOpened > 0 || valvesTwisted > 0) {
@@ -735,7 +723,7 @@ export class CageBot {
         message.who,
         `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
           valvesTwisted + valvesFoundTwisted
-        } / 20 valves twisted`
+        } / 20 valves twisted.`
       );
     }
   }
@@ -872,7 +860,7 @@ export class CageBot {
     await this._client.sendPrivateMessage(
       message.who,
       `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/${
-        this._maxDrunk
+        this._maxDrunk || "???"
       }.`
     );
   }
@@ -946,7 +934,7 @@ export class CageBot {
     const currentFull = await this._client.getFull();
     const currentDrunk = await this._client.getDrunk();
     const fullRemaining = 15 - currentFull;
-    const drunkRemaining = this._maxDrunk - currentDrunk;
+    const drunkRemaining = (this._maxDrunk || 14) - currentDrunk;
 
     if (fullRemaining <= 0 && drunkRemaining <= 0) {
       // have consumed as much as we can for the day and low on adventures
