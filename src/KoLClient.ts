@@ -64,6 +64,17 @@ export type EquipSlot =
   | "fakehands"
   | "cardsleeve";
 
+export type KoLStatus = {
+  adventures: number;
+  full: number;
+  drunk: number;
+  rollover: number;
+  equipment: Map<EquipSlot, number>;
+  familiar?: number;
+  meat: number;
+  level: number;
+};
+
 export class KoLClient {
   private _loginParameters;
   private _credentials?: KOLCredentials;
@@ -275,38 +286,41 @@ export class KoLClient {
     );
   }
 
-  async getEquipment(): Promise<Map<EquipSlot, number>> {
+  async getStatus(): Promise<KoLStatus> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "status",
       for: "Cagesitter (Maintained by Phillammon)",
     });
 
-    const equipment = new Map();
-
-    if (!apiResponse || !apiResponse["equipment"]) {
-      return equipment;
+    if (!apiResponse) {
+      return {
+        level: 1,
+        adventures: 10,
+        meat: 0,
+        drunk: 19,
+        full: 14,
+        equipment: new Map(),
+        rollover: Date.now(),
+      };
     }
 
+    const equipment = new Map();
     const equips = apiResponse["equipment"];
 
     for (let key of Object.keys(equips)) {
       equipment.set(key, parseInt(equips[key]));
     }
 
-    return equipment;
-  }
-
-  async getFamiliar(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-
-    if (!apiResponse || !apiResponse["familiar"]) {
-      return 0;
-    }
-
-    return parseInt(apiResponse["familiar"]);
+    return {
+      level: parseInt(apiResponse["level"]) || 1,
+      adventures: parseInt(apiResponse["adventures"]) || 10,
+      meat: parseInt(apiResponse["meat"]) || 0,
+      drunk: parseInt(apiResponse["drunk"]) || 0,
+      full: parseInt(apiResponse["full"]) || 0,
+      familiar: apiResponse["familiar"] ? parseInt(apiResponse["familiar"]) : undefined,
+      equipment: equipment,
+      rollover: parseInt(apiResponse["rollover"]),
+    };
   }
 
   async fetchNewWhispers(): Promise<PrivateMessage[]> {
@@ -330,7 +344,13 @@ export class KoLClient {
         msg: msg.msg,
       }));
 
-    newWhispers.forEach(({ who }) => this.sendPrivateMessage(who, "Message acknowledged."));
+    newWhispers.forEach((message) => {
+      if (message.msg.endsWith(".api")) {
+        this.sendPrivateMessage(message.who, '{"status":"seen"}');
+      } else {
+        this.sendPrivateMessage(message.who, "Message acknowledged.");
+      }
+    });
 
     return newWhispers;
   }
@@ -374,24 +394,6 @@ export class KoLClient {
     return this._player;
   }
 
-  async getAdvs(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-    if (apiResponse) return parseInt(apiResponse["adventures"], 10);
-    return 0;
-  }
-
-  async getMeat(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-    if (apiResponse) return parseInt(apiResponse["meat"], 10);
-    return 0;
-  }
-
   async getInventory(): Promise<Map<number, number>> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "inventory",
@@ -409,33 +411,6 @@ export class KoLClient {
     }
 
     return map;
-  }
-
-  async getFull(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-    if (apiResponse) return parseInt(apiResponse["full"], 10);
-    return 0;
-  }
-
-  async getDrunk(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-    if (apiResponse) return parseInt(apiResponse["drunk"], 10);
-    return 0;
-  }
-
-  async getLevel(): Promise<number> {
-    const apiResponse = await this.visitUrl("api.php", {
-      what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
-    });
-    if (apiResponse) return parseInt(apiResponse["level"], 10);
-    return 0;
   }
 
   async createMacro(name: string, macro: string): Promise<void> {
