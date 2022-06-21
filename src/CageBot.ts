@@ -40,9 +40,9 @@ type JsonStatus = {
 type DietStatus = {
   advs: number; // Possible adventures we can get from our diet
   food: number; //
-  fullTotal: number; // Total fullness that our current supply can provide
+  totalFullness: number; // Total fullness that our current supply can provide
   drink: number;
-  drunkTotal: number; // Total drunk that our current supply can provide
+  totalDrunkness: number; // Total drunk that our current supply can provide
 };
 
 type RequestResponse = {
@@ -538,9 +538,9 @@ export class CageBot {
     const dietStatus: DietStatus = {
       advs: advs,
       food: food,
-      fullTotal: full,
+      totalFullness: full,
       drink: drink,
-      drunkTotal: drunk,
+      totalDrunkness: drunk,
     };
 
     await this._client.sendPrivateMessage(message.who, JSON.stringify(dietStatus));
