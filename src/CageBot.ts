@@ -1,6 +1,5 @@
 import { KoLClan, KoLClient, KoLStatus, KoLUser, PrivateMessage } from "./KoLClient";
 import { Mutex } from "async-mutex";
-import { stat } from "fs";
 
 type CageTask = {
   requester: KoLUser;
@@ -80,7 +79,7 @@ export class CageBot {
   private _ownsTuxedo: boolean = false;
   private _usingBarrelMimic: boolean = false;
   private _doneInitialSetup: boolean = false;
-  private _lastTestCage: number = Date.now() / 1000;
+  private _lastTestCage: number = Date.now();
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -107,11 +106,6 @@ export class CageBot {
         console.log("Initial setup complete. Polling messages.");
 
         setInterval(async () => {
-          // Every 15 minutes, visit main.php to check if we're still caged.
-          if (this._lastTestCage + 15 * 60 < Date.now() / 1000) {
-            await this.testCaged();
-          }
-
           this._privateMessages.push(...(await this._client.fetchNewWhispers()));
         }, 3000);
         this.processMessage();
@@ -120,7 +114,7 @@ export class CageBot {
   }
 
   async testCaged(): Promise<void> {
-    this._lastTestCage = Date.now() / 1000;
+    this._lastTestCage = Date.now();
     let page = await this._client.visitUrl("place.php");
 
     if (/Pop!/.test(page)) {
@@ -476,6 +470,18 @@ export class CageBot {
   }
 
   async sendApiStatus(message: PrivateMessage): Promise<void> {
+    // If 15min has elapsed from last caged check
+    if (
+      this._amCaged &&
+      !mutex.isLocked() &&
+      !this.isBusy() &&
+      this._lastTestCage + 15 * 60 < Date.now()
+    ) {
+      await mutex.runExclusive(async () => {
+        await this.testCaged();
+      });
+    }
+
     const apiStatus = await this._client.getStatus();
     let busyStatus: BusyStatus | undefined;
 
