@@ -64,7 +64,6 @@ This requires level 9 at minumum.
 You then have the option to run -combat gear, this is optional but is great for opening grates and valves while trying to be caged.
 It is also extremely recommended, if you're enabling the option to open everything. You'll run into issues if you don't run some source of -combat.
 
-To raise initial funds, you could use farm 11-leaf clovers from the Hermit, and send them to sellbot.
 For MP Regeneration, an easy source is nurse's hat for 10-15.
 
 Combat %, three accessories are: Bram's Choker, Ring of Conflict, Red Shoe
