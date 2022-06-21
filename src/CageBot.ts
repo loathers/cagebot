@@ -11,11 +11,11 @@ type CageTask = {
 
 type Diet = {
   type: "food" | "drink";
-  id: number;
-  name: string;
-  level: number;
-  fullness: number;
-  estAdvs: number;
+  id: number; // Item ID
+  name: string; // Name
+  level: number; // Level required to consume
+  fullness: number; // Full/Drunk of the item
+  estAdvs: number; // Underestimate of the adventures given
 };
 
 type HoboStatus = "Diving" | "Caged" | "Releasable";
@@ -39,10 +39,10 @@ type JsonStatus = {
 
 type DietStatus = {
   possibleAdvsToday: number; // Possible adventures we can get from our diet
-  food: number; //
-  totalFullness: number; // Total fullness that our current supply can provide
-  drink: number;
-  totalDrunkness: number; // Total drunk that our current supply can provide
+  food: number; // Count of total fullness our current supply can provide
+  fullnessAdvs: number; // Total adventures our food would give
+  drink: number; // Count of total drunkness our current supply can provide
+  totalDrunkness: number; // Total adventures our drinks would give
 };
 
 type RequestResponse = {
@@ -514,8 +514,8 @@ export class CageBot {
     const level = status.level;
     let food: number = 0;
     let drink: number = 0;
-    let full: number = 0;
-    let drunk: number = 0;
+    let fullAdvs: number = 0;
+    let drunkAdvs: number = 0;
     let advs: number = this.getPossibleAdventuresFromDiet(status, inventory);
 
     for (let diet of this._diet) {
@@ -526,20 +526,20 @@ export class CageBot {
       let count = inventory.get(diet.id) || 0;
 
       if (diet.type == "food") {
-        food += count;
-        full += count * diet.fullness;
+        food += count * diet.fullness;
+        fullAdvs += count * diet.fullness * diet.estAdvs;
       } else {
-        drink += count;
-        drunk += count * diet.fullness;
+        drink += count * diet.fullness;
+        drunkAdvs += count * diet.fullness * diet.estAdvs;
       }
     }
 
     const dietStatus: DietStatus = {
       possibleAdvsToday: advs,
       food: food,
-      totalFullness: full,
+      fullnessAdvs: fullAdvs,
       drink: drink,
-      totalDrunkness: drunk,
+      totalDrunkness: drunkAdvs,
     };
 
     await this._client.sendPrivateMessage(message.who, JSON.stringify(dietStatus));
