@@ -24,7 +24,7 @@ Once you have those, navigate to the root directory of this project and
 execute the following:
 
 ```
-npm install
+npm ci
 npm run build
 ```
 
