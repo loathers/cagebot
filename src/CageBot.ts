@@ -38,7 +38,7 @@ type JsonStatus = {
 };
 
 type DietStatus = {
-  advs: number; // Possible adventures we can get from our diet
+  possibleAdvsToday: number; // Possible adventures we can get from our diet
   food: number; //
   totalFullness: number; // Total fullness that our current supply can provide
   drink: number;
@@ -415,9 +415,8 @@ export class CageBot {
 
   async tryRunBlocking(
     message: PrivateMessage,
-    toCall: (message: PrivateMessage) => Promise<any>,
-    apiRequest: boolean = false,
-    args: any = message
+    toCall: (message: PrivateMessage, apiRequest: boolean) => Promise<any>,
+    apiRequest: boolean = false
   ) {
     if (this.isBusy() || mutex.isLocked()) {
       if (apiRequest) {
@@ -433,7 +432,7 @@ export class CageBot {
     }
 
     await mutex.runExclusive(async () => {
-      await toCall(args);
+      await toCall.call(this, message, apiRequest);
     });
   }
 
@@ -444,16 +443,16 @@ export class CageBot {
       console.log(`Processing whisper from ${message.who.name} (#${message.who.id})`);
       const processedMsg = message.msg.toLowerCase();
 
-      if (processedMsg == "status.api") {
+      if (processedMsg.startsWith("status.api")) {
         await this.sendApiStatus(message);
-      } else if (processedMsg == "diet.api") {
+      } else if (processedMsg.startsWith("diet.api")) {
         await this.sendDietApi(message);
-      } else if (processedMsg == "cage.api") {
-        await this.tryRunBlocking(message, this.becomeCagedApi, true);
-      } else if (processedMsg == "release.api") {
-        await this.tryRunBlocking(message, this.releaseCageApi, true);
-      } else if (processedMsg == "escape.api") {
-        await this.tryRunBlocking(message, this.escapeCageApi, true);
+      } else if (processedMsg.startsWith("cage.api")) {
+        await this.tryRunBlocking(message, this.becomeCaged, true);
+      } else if (processedMsg.startsWith("release.api")) {
+        await this.tryRunBlocking(message, this.releaseCage, true);
+      } else if (processedMsg.startsWith("escape.api")) {
+        await this.tryRunBlocking(message, this.escapeCage, true);
       } else if (processedMsg.startsWith("status")) {
         await this.statusReport(message, true);
       } else if (processedMsg.startsWith("cage")) {
@@ -536,7 +535,7 @@ export class CageBot {
     }
 
     const dietStatus: DietStatus = {
-      advs: advs,
+      possibleAdvsToday: advs,
       food: food,
       totalFullness: full,
       drink: drink,
@@ -592,11 +591,7 @@ export class CageBot {
     return [gratesOpened, valvesTwisted];
   }
 
-  async becomeCagedApi(message: PrivateMessage): Promise<void> {
-    return await this.becomeCaged(message, true);
-  }
-
-  async becomeCaged(message: PrivateMessage, apiRequest: boolean = false): Promise<void> {
+  async becomeCaged(message: PrivateMessage, apiRequest: boolean): Promise<void> {
     await this.testCaged();
 
     // If rollover is less than 7 minutes away
@@ -1003,10 +998,6 @@ export class CageBot {
     }
   }
 
-  async escapeCageApi(message: PrivateMessage): Promise<void> {
-    return await this.escapeCage(message, true);
-  }
-
   async escapeCage(message: PrivateMessage, apiRequest: boolean = false): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) requested escape from cage.`);
 
@@ -1039,11 +1030,7 @@ export class CageBot {
     }
   }
 
-  async releaseCageApi(message: PrivateMessage): Promise<void> {
-    return await this.releaseCage(message, true);
-  }
-
-  async releaseCage(message: PrivateMessage, apiRequest: boolean = false): Promise<void> {
+  async releaseCage(message: PrivateMessage, apiRequest: boolean): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) requested release from cage.`);
 
     if (
@@ -1060,9 +1047,9 @@ export class CageBot {
 
       if (apiRequest) {
         if (this._amCaged) {
-          await this.sendApiResponse(message, "Error", "not_caged");
-        } else {
           await this.sendApiResponse(message, "Error", "timer_not_expired");
+        } else {
+          await this.sendApiResponse(message, "Error", "not_caged");
         }
       } else {
         await this.statusReport(message);

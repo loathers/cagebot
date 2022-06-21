@@ -345,7 +345,7 @@ export class KoLClient {
       }));
 
     newWhispers.forEach((message) => {
-      if (message.msg.endsWith(".api")) {
+      if (message.msg.match(/^[a-z]+\.api( |$)/)) {
         this.sendPrivateMessage(message.who, '{"status":"seen"}');
       } else {
         this.sendPrivateMessage(message.who, "Message acknowledged.");
