@@ -41,7 +41,7 @@ type DietStatus = {
   food: number; // Count of total fullness our current supply can provide
   fullnessAdvs: number; // Total adventures our food would give
   drink: number; // Count of total drunkness our current supply can provide
-  totalDrunkness: number; // Total adventures our drinks would give
+  drunknessAdvs: number; // Total adventures our drinks would give
 };
 
 type RequestResponse = {
@@ -549,7 +549,7 @@ export class CageBot {
       food: food,
       fullnessAdvs: fullAdvs,
       drink: drink,
-      totalDrunkness: drunkAdvs,
+      drunknessAdvs: drunkAdvs,
     };
 
     await this._client.sendPrivateMessage(message.who, JSON.stringify(dietStatus));
