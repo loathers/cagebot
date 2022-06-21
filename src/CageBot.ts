@@ -79,7 +79,7 @@ export class CageBot {
   private _ownsTuxedo: boolean = false;
   private _usingBarrelMimic: boolean = false;
   private _doneInitialSetup: boolean = false;
-  private _lastTestCage: number = Date.now();
+  private _lastThirdPartyCageTest: number = Date.now();
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -113,8 +113,8 @@ export class CageBot {
     );
   }
 
-  async testCaged(): Promise<void> {
-    this._lastTestCage = Date.now();
+  async testForThirdPartyUncaging(): Promise<void> {
+    this._lastThirdPartyCageTest = Date.now();
     let page = await this._client.visitUrl("place.php");
 
     if (/Pop!/.test(page)) {
@@ -132,7 +132,7 @@ export class CageBot {
   }
 
   async initialSetup(): Promise<void> {
-    await this.testCaged();
+    await this.testForThirdPartyUncaging();
 
     if (!this._amCaged && !this._doneInitialSetup) {
       if (!/CAGEBOT/.test(await this._client.visitUrl("account_combatmacros.php"))) {
@@ -469,18 +469,22 @@ export class CageBot {
     }
   }
 
-  async sendApiStatus(message: PrivateMessage): Promise<void> {
+  async safelyTestForThirdPartyUncaging() {
     // If 15min has elapsed from last caged check
     if (
       this._amCaged &&
       !mutex.isLocked() &&
       !this.isBusy() &&
-      this._lastTestCage + 15 * 60 < Date.now()
+      this._lastThirdPartyCageTest + 15 * 60 < Date.now()
     ) {
       await mutex.runExclusive(async () => {
-        await this.testCaged();
+        await this.testForThirdPartyUncaging();
       });
     }
+  }
+
+  async sendApiStatus(message: PrivateMessage): Promise<void> {
+    await this.safelyTestForThirdPartyUncaging();
 
     const apiStatus = await this._client.getStatus();
     let busyStatus: BusyStatus | undefined;
@@ -598,7 +602,7 @@ export class CageBot {
   }
 
   async becomeCaged(message: PrivateMessage, apiRequest: boolean): Promise<void> {
-    await this.testCaged();
+    await this.testForThirdPartyUncaging();
 
     // If rollover is less than 7 minutes away
     if ((await this._client.getSecondsToRollover()) < 7 * 60) {
@@ -1123,6 +1127,7 @@ export class CageBot {
       console.log(`${message.who.name} (#${message.who.id}) requested status report.`);
     }
 
+    await this.safelyTestForThirdPartyUncaging();
     const status = await this._client.getStatus();
 
     if (this._amCaged) {
@@ -1201,7 +1206,7 @@ export class CageBot {
   }
 
   async chewOut(): Promise<void> {
-    await this.testCaged();
+    await this.testForThirdPartyUncaging();
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {
       snarfblat: 166,
