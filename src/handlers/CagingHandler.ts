@@ -29,6 +29,7 @@ export class CagingHandler {
         message.apiRequest ? " in json format" : ""
       }.`
     );
+
     await this._cagebot.testForThirdPartyUncaging();
 
     // If rollover is less than 7 minutes away
@@ -276,10 +277,11 @@ export class CagingHandler {
         });
 
         if (escapeCageToOpenGratesAndValves()) {
+          console.log(`Escaping cage to continue opening grates and twisting valves!`);
           await this._cagebot.chewOut();
           estimatedTurnsSpent += 10;
           timesChewedOut++;
-          console.log(`Escaping cage to continue opening grates and twisting valves!`);
+          caged = false;
         } else {
           console.log(`Caged!`);
         }

@@ -16,6 +16,8 @@ export class UncageHandler {
       }.`
     );
 
+    await this._cagebot.testForThirdPartyUncaging();
+
     if (
       !this._cagebot.isCaged() ||
       (this._cagebot.getCageTask() && this._cagebot.getCageTask()?.requester.id !== message.who.id)
@@ -46,6 +48,8 @@ export class UncageHandler {
         message.apiRequest ? " in json format" : ""
       }.`
     );
+
+    await this._cagebot.testForThirdPartyUncaging();
 
     if (
       !this._cagebot.isCaged() ||
