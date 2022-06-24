@@ -1,0 +1,278 @@
+import { CageBot } from "../CageBot";
+import { KoLClient } from "../KoLClient";
+import { Diet, DietStatus, KoLStatus, PrivateMessage, Settings } from "../Typings";
+import { getLilBarrelDiet, getManualDiet, sendApiResponse } from "../Utils";
+
+export class DietHandler {
+  private _diet?: Diet[];
+  private _cagebot: CageBot;
+  private _maxDrunk?: number;
+  private _usingBarrelMimic: boolean = false;
+  private _ownsTuxedo: boolean = false;
+
+  constructor(cagebot: CageBot) {
+    this._cagebot = cagebot;
+  }
+
+  getClient(): KoLClient {
+    return this._cagebot.getClient();
+  }
+
+  getSettings(): Settings {
+    return this._cagebot.getSettings();
+  }
+
+  getMaxDrunk(): number | undefined {
+    return this._maxDrunk;
+  }
+
+  async doSetup() {
+    if (!this._cagebot.isCaged() && !this._maxDrunk) {
+      if (/>Liver of Steel<\/a>/.test(await this.getClient().visitUrl("charsheet.php"))) {
+        this._maxDrunk = 19;
+      } else {
+        this._maxDrunk = 14;
+      }
+    }
+
+    if (this._diet) {
+      return;
+    }
+
+    const status = await this.getClient().getStatus();
+
+    this._ownsTuxedo =
+      (await this.getClient().getInventory()).has(2489) || status?.equipment.get("shirt") == 2489;
+
+    this._usingBarrelMimic = status?.familiar == 198;
+
+    if (this._usingBarrelMimic) {
+      this._diet = getLilBarrelDiet();
+    } else {
+      this._diet = getManualDiet();
+    }
+  }
+
+  async maintainAdventures(message?: PrivateMessage): Promise<number> {
+    const status = await this.getClient().getStatus();
+    const beforeAdv = status.adventures;
+
+    if (beforeAdv > this.getSettings().maintainAdventures) {
+      return beforeAdv;
+    }
+
+    const currentFull = status.full;
+    const currentDrunk = status.drunk;
+    const fullRemaining = 15 - currentFull;
+    const drunkRemaining = (this._maxDrunk || 14) - currentDrunk;
+
+    if (fullRemaining <= 0 && drunkRemaining <= 0) {
+      // have consumed as much as we can for the day and low on adventures
+      return beforeAdv;
+    }
+
+    const currentLevel = status.level;
+    const inventory: Map<number, number> = await this.getClient().getInventory();
+    let itemConsumed;
+    let itemsMissing: string[] = [];
+    let itemIdsMissing: string[] = [];
+    let consumeMessage: any;
+
+    for (let diet of this._diet || []) {
+      if (diet.level > currentLevel) {
+        continue;
+      }
+
+      if ((inventory.get(diet.id) || 0) <= 0) {
+        itemsMissing.push(diet.name);
+        itemIdsMissing.push(diet.id.toString());
+        continue;
+      }
+
+      if (diet.fullness > (diet.type == "food" ? fullRemaining : drunkRemaining)) {
+        continue;
+      }
+
+      if (diet.type == "food") {
+        console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
+        consumeMessage = await this.getClient().eat(diet.id);
+      } else {
+        console.log(`Attempting to drink ${diet.name}, of which we have ${inventory.get(diet.id)}`);
+
+        if (this._usingBarrelMimic && this._ownsTuxedo) {
+          const priorShirt = status.equipment.get("shirt") || 0;
+
+          if (priorShirt != 2489) {
+            await this.getClient().equip(2489);
+          }
+
+          consumeMessage = this.getClient().drink(diet.id);
+
+          if (priorShirt > 0 && priorShirt != 2489) {
+            await this.getClient().equip(priorShirt);
+          }
+        } else {
+          consumeMessage = await this.getClient().drink(diet.id);
+        }
+      }
+
+      itemConsumed = diet.name;
+      break;
+    }
+
+    const afterAdv = (await this.getClient().getStatus()).adventures;
+
+    if (beforeAdv === afterAdv) {
+      if (itemConsumed) {
+        console.log(`Failed to consume ${itemConsumed}.`);
+        console.log(consumeMessage);
+      } else if (this._usingBarrelMimic) {
+        console.log(`I am out of Lil' Barrel Mimic consumables.`);
+
+        if (message !== undefined) {
+          if (message.apiRequest) {
+            await sendApiResponse(message, "Issue", "lack_barrel_edibles");
+          } else {
+            message.reply(`Please tell my operator that I am out of consumables.`);
+          }
+        }
+      } else {
+        console.log(`I am out of ${itemsMissing.join(", ")}.`);
+
+        if (message !== undefined) {
+          if (message.apiRequest) {
+            await sendApiResponse(message, "Issue", "lack_edibles:" + itemIdsMissing.join(","));
+          } else {
+            this.getClient().sendPrivateMessage(
+              message.who,
+              `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
+            );
+          }
+        }
+      }
+    } else {
+      // If it didn't restore enough adventures and we definitely did gain adventures
+      if (beforeAdv < afterAdv && afterAdv <= this.getSettings().maintainAdventures) {
+        console.log(
+          `Diet success! We gained ${
+            afterAdv - beforeAdv
+          } adventures! However we're below our threshold so we're going to call this again.`
+        );
+        return this.maintainAdventures(message);
+      }
+
+      console.log(
+        `Diet success! We previously had ${beforeAdv} adventures, now we have ${afterAdv} adventures!`
+      );
+    }
+
+    return afterAdv;
+  }
+
+  async sendDiet(message: PrivateMessage) {
+    console.log(
+      `${message.who.name} (#${message.who.id}) requested diet information${
+        message.apiRequest ? " in json format" : ""
+      }.`
+    );
+    if (message.apiRequest) {
+      this.sendDietByApi(message);
+    } else {
+      this.sendDietByNonApi(message);
+    }
+  }
+
+  async sendDietByApi(message: PrivateMessage) {
+    const inventory: Map<number, number> = await this.getClient().getInventory();
+    const status = await this.getClient().getStatus();
+    const level = status.level;
+    let food: number = 0;
+    let drink: number = 0;
+    let fullAdvs: number = 0;
+    let drunkAdvs: number = 0;
+    let advs: number = this.getPossibleAdventuresFromDiet(status, inventory);
+
+    for (let diet of this._diet || []) {
+      if (!inventory.has(diet.id) || diet.level > level) {
+        continue;
+      }
+
+      let count = inventory.get(diet.id) || 0;
+
+      if (diet.type == "food") {
+        food += count * diet.fullness;
+        fullAdvs += count * diet.fullness * diet.estAdvs;
+      } else {
+        drink += count * diet.fullness;
+        drunkAdvs += count * diet.fullness * diet.estAdvs;
+      }
+    }
+
+    const dietStatus: DietStatus = {
+      possibleAdvsToday: advs,
+      food: food,
+      fullnessAdvs: fullAdvs,
+      drink: drink,
+      drunknessAdvs: drunkAdvs,
+    };
+
+    await this.getClient().sendPrivateMessage(message.who, JSON.stringify(dietStatus));
+  }
+
+  async sendDietByNonApi(message: PrivateMessage) {
+    const inventory: Map<number, number> = await this.getClient().getInventory();
+    let food: number = 0;
+    let drink: number = 0;
+
+    for (let diet of this._diet || []) {
+      if (!inventory.has(diet.id)) {
+        continue;
+      }
+
+      if (diet.type == "food") {
+        food += inventory.get(diet.id) || 0;
+      } else {
+        drink += inventory.get(diet.id) || 0;
+      }
+    }
+
+    await this.getClient().sendPrivateMessage(
+      message.who,
+      `We have ${food} sticks of bread, ${drink} barrels of booze`
+    );
+  }
+
+  getPossibleAdventuresFromDiet(status: KoLStatus, inv: Map<number, number>): number {
+    if (!this._diet) {
+      return 0;
+    }
+
+    let drunkRemaining: number = (this._maxDrunk || 14) - status.drunk;
+    let fullRemaining: number = 14 - status.full;
+    let advs: number = 0;
+
+    for (let diet of this._diet) {
+      if (diet.level > status.level) {
+        continue;
+      }
+
+      let amount = inv.get(diet.id) || 0;
+
+      while (
+        amount > 0 &&
+        (diet.type == "food" ? fullRemaining : drunkRemaining) >= diet.fullness
+      ) {
+        advs += diet.estAdvs;
+        amount--;
+
+        if (diet.type == "food") {
+          fullRemaining -= diet.fullness;
+        } else {
+          drunkRemaining -= diet.fullness;
+        }
+      }
+    }
+
+    return advs;
+  }
+}

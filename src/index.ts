@@ -59,6 +59,8 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
     openEverythingWhileAdventuresAbove: parseInt(
       process.env.DONT_OPEN_EVERYTHING_WHEN_ADVS_BELOW || "80"
     ),
+    whiteboardCaged: process.env.WHITEBOARD_CAGED || "${name} (#${id}) is CAGED in Hobopolis",
+    whiteboardUncaged: process.env.WHITEBOARD_UNCAGED || "Hobopolis is UNCAGED",
   });
   cageBot.start();
 }

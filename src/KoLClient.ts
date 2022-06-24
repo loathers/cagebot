@@ -3,6 +3,15 @@ import { select } from "xpath";
 import { DOMParser as dom } from "xmldom";
 import { Agent as httpsAgent } from "https";
 import { Agent as httpAgent } from "http";
+import {
+  KOLCredentials,
+  KoLUser,
+  KoLStatus,
+  PrivateMessage,
+  KOLMessage,
+  KoLClan,
+  MallResult,
+} from "./Typings";
 
 axios.defaults.timeout = 30000;
 axios.defaults.httpAgent = new httpAgent({ keepAlive: true });
@@ -15,65 +24,6 @@ const parser = new dom({
     fatalError: console.log,
   },
 });
-
-type KOLCredentials = {
-  sessionCookies: string;
-  pwdhash: string;
-};
-
-export type KoLUser = {
-  name: string;
-  id: string;
-};
-
-type KOLMessage = {
-  who?: KoLUser;
-  type?: string;
-  msg?: string;
-  link?: string;
-  time: string;
-};
-
-export type PrivateMessage = {
-  who: KoLUser;
-  msg: string;
-};
-
-export type KoLClan = {
-  name: string;
-  id: string;
-};
-
-export type MallResult = {
-  storeId: number;
-  itemId: number;
-  stock: number;
-  limit?: number;
-  price: number;
-};
-
-export type EquipSlot =
-  | "hat"
-  | "shirt"
-  | "pants"
-  | "weapon"
-  | "offhand"
-  | "acc1"
-  | "acc2"
-  | "acc3"
-  | "fakehands"
-  | "cardsleeve";
-
-export type KoLStatus = {
-  adventures: number;
-  full: number;
-  drunk: number;
-  rollover: number;
-  equipment: Map<EquipSlot, number>;
-  familiar?: number;
-  meat: number;
-  level: number;
-};
 
 export class KoLClient {
   private _loginParameters;
@@ -90,6 +40,14 @@ export class KoLClient {
     this._loginParameters.append("password", password);
     this._loginParameters.append("secure", "0");
     this._loginParameters.append("submitbutton", "Log In");
+  }
+
+  getUsername() {
+    return this._player?.name;
+  }
+
+  getUserID() {
+    return this._player?.id;
   }
 
   async getSecondsToRollover(): Promise<number> {
@@ -166,6 +124,7 @@ export class KoLClient {
     }
 
     console.log(`Not logged in. Logging in as ${this._loginParameters.get("loginname")}`);
+
     try {
       const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
         method: "POST",
@@ -194,6 +153,7 @@ export class KoLClient {
         id: apiResponse.data.playerid,
         name: apiResponse.data.name,
       };
+      console.log("Login success.");
       return true;
     } catch {
       console.log("Login failed..");
@@ -342,6 +302,14 @@ export class KoLClient {
       .map((msg: KOLMessage) => ({
         who: msg.who,
         msg: msg.msg,
+        apiRequest: msg.msg?.includes(".api"),
+        reply: async (message: string) => {
+          if (!msg.who) {
+            return;
+          }
+
+          await this.sendPrivateMessage(msg.who, message);
+        },
       }));
 
     newWhispers.forEach((message) => {
@@ -485,5 +453,31 @@ export class KoLClient {
       whichitem: item,
       quantity: amount,
     });
+  }
+
+  async setClanWhiteboard(text: string): Promise<void> {
+    await this.visitUrl("clan_basement.php", {
+      action: "whitewrite",
+      whiteboard: text,
+    });
+  }
+
+  /**
+   * This will return undefined if we can not write to a whiteboard.
+   *
+   * It will also return the text encoded in html entities, namely an issue for characters such as < or >
+   */
+  async getWriteableClanWhiteboard(): Promise<string | undefined> {
+    const response: string = await this.visitUrl("clan_basement.php?whiteboard=1");
+
+    let match = response.match(
+      /<textarea maxlength=5000 name=whiteboard rows=15 cols=60>(.*)<\/textarea><br>/s
+    );
+
+    if (!match) {
+      return undefined;
+    }
+
+    return match[0];
   }
 }
