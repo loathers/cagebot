@@ -1,5 +1,5 @@
 import { CageBot } from "../CageBot";
-import { PrivateMessage } from "../utils/Typings";
+import { ChatMessage } from "../utils/Typings";
 import { sendApiResponse } from "../utils/Utils";
 
 export class UncageHandler {
@@ -9,7 +9,7 @@ export class UncageHandler {
     this._cagebot = cagebot;
   }
 
-  async escapeCage(message: PrivateMessage, apiRequest: boolean = false): Promise<void> {
+  async escapeCage(message: ChatMessage, apiRequest: boolean = false): Promise<void> {
     console.log(
       `${message.who.name} (#${message.who.id}) requested escape from cage${
         message.apiRequest ? " in json format" : ""
@@ -42,7 +42,7 @@ export class UncageHandler {
     }
   }
 
-  async releaseCage(message: PrivateMessage): Promise<void> {
+  async releaseCage(message: ChatMessage): Promise<void> {
     console.log(
       `${message.who.name} (#${message.who.id}) requested release from cage${
         message.apiRequest ? " in json format" : ""

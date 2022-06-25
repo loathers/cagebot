@@ -4,7 +4,7 @@ import { CagingHandler } from "./handlers/CagingHandler";
 import { UncageHandler } from "./handlers/UncageHandler";
 import { BusyResponse, StatusResponse } from "./utils/JsonResponses";
 import { KoLClient } from "./utils/KoLClient";
-import { PrivateMessage, CageTask, Settings } from "./utils/Typings";
+import { ChatMessage, CageTask, Settings } from "./utils/Typings";
 import {
   humanReadableTime,
   updateWhiteboard,
@@ -16,7 +16,7 @@ import {
 const mutex = new Mutex();
 
 export class CageBot {
-  private _privateMessages: PrivateMessage[] = [];
+  private _privateMessages: ChatMessage[] = [];
   private _client: KoLClient;
   private _amCaged: boolean = false;
   private _cageTask?: CageTask;
@@ -139,6 +139,7 @@ export class CageBot {
 
   async doInitialSetup(): Promise<void> {
     await this.doSetup();
+    await this.getClient().useChatMacro("/listenon Hobopolis");
 
     if (this.isCaged()) {
       await this.loadSettings();
@@ -195,7 +196,7 @@ export class CageBot {
     return this._cageTask != undefined && !this._amCaged;
   }
 
-  async runBlockingRequest(message: PrivateMessage, toCall: () => Promise<any>) {
+  async runBlockingRequest(message: ChatMessage, toCall: () => Promise<any>) {
     if (this.isBusy() || mutex.isLocked()) {
       if (message.apiRequest) {
         await sendApiResponse(message, "Busy", "already_in_use");
@@ -213,10 +214,56 @@ export class CageBot {
     });
   }
 
+  async processHobopolisMessage(message: ChatMessage) {
+    // If not a clan dungeon announcement
+    if (!message.who || message.who.id !== "-2") {
+      return;
+    }
+
+    const task = this._cageTask;
+
+    if (!this._amCaged || !task || !task.requester) {
+      return;
+    }
+
+    if (
+      message.msg.toLowerCase() !==
+      `${task.requester.name.toLowerCase()} has made it through the sewer.`
+    ) {
+      return;
+    }
+
+    // Requester made it through the sewers
+    mutex.runExclusive(() => {
+      if (!this._amCaged || this._cageTask !== task) {
+        return;
+      }
+
+      if (!task.autoRelease) {
+        return;
+      }
+
+      const fakeMessage: ChatMessage = {
+        private: true,
+        who: task.requester,
+        msg: "escape",
+        apiRequest: task.apiResponses,
+        reply: (message: string) => this.getClient().sendPrivateMessage(task.requester, message),
+      };
+
+      this._uncageHandler.escapeCage(fakeMessage);
+    });
+  }
+
   async processMessage(): Promise<void> {
     const message = this._privateMessages.shift();
 
     if (message) {
+      if (!message.private) {
+        await this.processHobopolisMessage(message);
+        return;
+      }
+
       console.log(
         `Processing whisper${message.apiRequest ? ".api" : ""} from ${message.who.name} (#${
           message.who.id
@@ -260,7 +307,7 @@ export class CageBot {
     }
   }
 
-  async sendHelp(message: PrivateMessage): Promise<void> {
+  async sendHelp(message: ChatMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) requested help.`);
 
     await message.reply(
@@ -283,7 +330,7 @@ export class CageBot {
     await message.reply(`- help: Displays this message.`);
   }
 
-  async sendStatus(message: PrivateMessage, directlyRequested: boolean = false): Promise<void> {
+  async sendStatus(message: ChatMessage, directlyRequested: boolean = false): Promise<void> {
     if (directlyRequested) {
       console.log(`${message.who.name} (#${message.who.id}) requested status report.`);
     }
@@ -297,7 +344,7 @@ export class CageBot {
     }
   }
 
-  private async statusReportByNonApi(message: PrivateMessage) {
+  private async statusReportByNonApi(message: ChatMessage) {
     const status = await this._client.getStatus();
 
     if (this._amCaged) {
@@ -340,7 +387,7 @@ export class CageBot {
     );
   }
 
-  private async statusReportByApi(message: PrivateMessage) {
+  private async statusReportByApi(message: ChatMessage) {
     const status = await this.getClient().getStatus();
     let busyStatus: BusyResponse | undefined;
 
@@ -374,7 +421,7 @@ export class CageBot {
     await message.reply(JSON.stringify(apiStatus));
   }
 
-  async didntUnderstand(message: PrivateMessage): Promise<void> {
+  async didntUnderstand(message: ChatMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) made an incomprehensible request.`);
 
     await message.reply(
@@ -394,7 +441,7 @@ export class CageBot {
     return this.secondsInTask() > 3600;
   }
 
-  async chewOut(message?: PrivateMessage): Promise<void> {
+  async chewOut(message?: ChatMessage): Promise<void> {
     await this.testForThirdPartyUncaging();
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {

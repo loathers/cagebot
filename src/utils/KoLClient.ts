@@ -7,7 +7,7 @@ import {
   KOLCredentials,
   KoLUser,
   KoLStatus,
-  PrivateMessage,
+  ChatMessage as ChatMessage,
   KOLMessage,
   KoLClan,
   MallResult,
@@ -286,7 +286,7 @@ export class KoLClient {
     };
   }
 
-  async fetchNewWhispers(): Promise<PrivateMessage[]> {
+  async fetchNewWhispers(): Promise<ChatMessage[]> {
     if (this._isRollover || !(await this.logIn())) {
       return [];
     }
@@ -300,22 +300,37 @@ export class KoLClient {
 
     this._lastFetchedMessages = newChatMessagesResponse["last"];
 
-    const newWhispers: PrivateMessage[] = newChatMessagesResponse["msgs"]
-      .filter((msg: KOLMessage) => msg["type"] === "private")
-      .map((msg: KOLMessage) => ({
-        who: msg.who,
-        msg: msg.msg,
-        apiRequest: msg.msg?.includes(".api"),
-        reply: async (message: string) => {
-          if (!msg.who) {
-            return;
-          }
+    const newWhispers: ChatMessage[] = newChatMessagesResponse["msgs"]
+      .filter(
+        (msg: KOLMessage) =>
+          msg["type"] === "private" || (msg["type"] === "public" && msg["channel"] === "hobopolis")
+      )
+      .map(
+        (msg: KOLMessage) =>
+          ({
+            private: msg.type === "private",
+            who: msg.who,
+            msg: msg.msg,
+            apiRequest: msg.msg?.includes(".api"),
+            reply: async (message: string) => {
+              if (!msg.who) {
+                return;
+              }
 
-          await this.sendPrivateMessage(msg.who, message);
-        },
-      }));
+              if (msg.type === "private") {
+                await this.sendPrivateMessage(msg.who, message);
+              } else {
+                await this.useChatMacro("/w Hobopolis " + message);
+              }
+            },
+          } as ChatMessage)
+      );
 
     newWhispers.forEach((message) => {
+      if (!message.private) {
+        return;
+      }
+
       if (message.apiRequest) {
         message.reply(JSON.stringify({ status: "Seen" } as RequestResponse));
       } else {

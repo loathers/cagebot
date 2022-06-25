@@ -1,5 +1,7 @@
 import * as dotenv from "dotenv";
+import { readFileSync } from "fs";
 import { CageBot } from "./CageBot";
+import { Settings } from "./utils/Typings";
 
 dotenv.config();
 console.log("  _____                 _           _   ");
@@ -53,14 +55,22 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
   console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 } else {
-  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, {
-    maintainAdventures: parseInt(process.env.MAINTAIN_ADVENTURES || "80"),
-    openEverything: process.env.OPEN_EVERYTHING === "true",
-    openEverythingWhileAdventuresAbove: parseInt(
-      process.env.DONT_OPEN_EVERYTHING_WHEN_ADVS_BELOW || "80"
-    ),
-    whiteboardCaged: process.env.WHITEBOARD_CAGED || "${name} (#${id}) is CAGED in Hobopolis",
-    whiteboardUncaged: process.env.WHITEBOARD_UNCAGED || "Hobopolis is UNCAGED",
-  });
+  const settings = JSON.parse(readFileSync("./Settings.json", "utf-8") || "{}");
+
+  for (let key of Object.keys(settings)) {
+    if (!process.env[key]) {
+      continue;
+    }
+
+    (settings as any)[key] = process.env[key];
+  }
+
+  settings.maintainAdventures = parseInt(settings.maintainAdventures || "100");
+  settings.openEverything = settings.openEverything === "true";
+  settings.openEverythingWhileAdventuresAbove = parseInt(
+    settings.openEverythingWhileAdventuresAbove || "80"
+  );
+
+  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, settings as Settings);
   cageBot.start();
 }

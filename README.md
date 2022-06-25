@@ -39,10 +39,9 @@ package.json). This file should be in the form:
 ```
   KOL_USER='Cagebot'
   KOL_PASS='Cagebot P4ssw0rD'
-  MAINTAIN_ADVENTURES='80'
-  OPEN_EVERYTHING='true/false'
-  ONLY_OPEN_WHEN_ADVS_ABOVE='80'
 ```
+
+You will also want the `Settings.json` file, however you can override the settings in the .env file, such as `maintainAdventures='80'`
 
 ## AUTOATTACK MACRO
 

@@ -1,7 +1,7 @@
 import { CageBot } from "../CageBot";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { CageTask, Diet, PrivateMessage, SavedSettings } from "./Typings";
+import { CageTask, Diet, ChatMessage, SavedSettings } from "./Typings";
 import { readFileSync, writeFileSync } from "fs";
 
 const savedFileName: string = "./runtime_state.json";
@@ -15,7 +15,7 @@ export function humanReadableTime(seconds: number): string {
 }
 
 export async function sendApiResponse(
-  message: PrivateMessage,
+  message: ChatMessage,
   status: RequestStatus,
   details: RequestStatusDetails
 ) {
@@ -61,7 +61,8 @@ export function loadSettings(): SavedSettings | undefined {
         requester: task["requester"],
         clan: task["clan"],
         started: parseInt(task["started"]),
-        apiResponses: task["apiResponses"] == "true",
+        apiResponses: task["apiResponses"] === "true",
+        autoRelease: task["autoRelease"] === "true",
       };
     }
 
@@ -74,7 +75,11 @@ export function loadSettings(): SavedSettings | undefined {
 }
 
 export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
-  if (!cagebot.getClient().getUsername()) {
+  if (
+    !cagebot.getClient().getUsername() ||
+    !cagebot.getSettings().whiteboardMessageCaged ||
+    !cagebot.getSettings().whiteboardMessageUncaged
+  ) {
     return;
   }
 
@@ -93,12 +98,16 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
 
   const occupied = cagebot
     .getSettings()
-    .whiteboardCaged.replaceAll("${name}", username)
+    .whiteboardMessageCaged?.replaceAll("${name}", username)
     .replaceAll("${id}", userid);
   const unoccupied = cagebot
     .getSettings()
-    .whiteboardUncaged.replaceAll("${name}", username)
+    .whiteboardMessageUncaged?.replaceAll("${name}", username)
     .replaceAll("${id}", userid);
+
+  if (!occupied || !unoccupied) {
+    return;
+  }
 
   if (setCaged) {
     if (!whiteboard.includes(unoccupied)) {

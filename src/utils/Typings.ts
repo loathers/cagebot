@@ -3,6 +3,7 @@ export type CageTask = {
   clan: KoLClan;
   started: number;
   apiResponses: boolean;
+  autoRelease: boolean;
 };
 
 export type SavedSettings = {
@@ -24,8 +25,9 @@ export type Settings = {
   maintainAdventures: number;
   openEverything: boolean;
   openEverythingWhileAdventuresAbove: number;
-  whiteboardCaged: string;
-  whiteboardUncaged: string;
+  whiteboardMessageCaged?: string;
+  whiteboardMessageUncaged?: string;
+  whiteboardMessageAutoEscape?: string;
 };
 
 export type KOLCredentials = {
@@ -43,10 +45,12 @@ export type KOLMessage = {
   type?: string;
   msg?: string;
   link?: string;
+  channel: string;
   time: string;
 };
 
-export type PrivateMessage = {
+export type ChatMessage = {
+  private: boolean;
   who: KoLUser;
   msg: string;
   apiRequest: boolean;

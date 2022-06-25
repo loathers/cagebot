@@ -1,7 +1,7 @@
 import { ExploredResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
 import { KoLClient } from "../utils/KoLClient";
-import { Settings, PrivateMessage, KoLClan } from "../utils/Typings";
+import { Settings, ChatMessage, KoLClan } from "../utils/Typings";
 import {
   sendApiResponse,
   humanReadableTime,
@@ -24,7 +24,7 @@ export class CagingHandler {
     return this._cagebot.getSettings();
   }
 
-  async becomeCaged(message: PrivateMessage): Promise<void> {
+  async becomeCaged(message: ChatMessage): Promise<void> {
     console.log(
       `${message.who.name} (#${message.who.id}) requested a caging${
         message.apiRequest ? " in json format" : ""
@@ -156,14 +156,22 @@ export class CagingHandler {
     await this.attemptCage(message, targetClan);
   }
 
-  async attemptCage(message: PrivateMessage, targetClan: KoLClan): Promise<void> {
+  async attemptCage(message: ChatMessage, targetClan: KoLClan): Promise<void> {
+    const autoEscapeMessage = this.getSettings().whiteboardMessageAutoEscape;
+
     this._cagebot.setCagedStatus(false, {
       clan: targetClan,
       requester: message.who,
       started: Date.now(),
       apiResponses: message.apiRequest,
+      autoRelease:
+        autoEscapeMessage &&
+        (await this._cagebot.getClient().getWriteableClanWhiteboard())?.includes(autoEscapeMessage)
+          ? true
+          : false,
     });
 
+    await this.getClient().useChatMacro("/listenon Hobopolis");
     let status = await this.getClient().getStatus();
 
     let gratesOpened = 0;
@@ -343,6 +351,8 @@ export class CagingHandler {
         requester: message.who,
         started: Date.now(),
         apiResponses: message.apiRequest,
+        autoRelease:
+          this._cagebot.getCageTask() && this._cagebot.getCageTask()?.autoRelease ? true : false,
       });
 
       console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);

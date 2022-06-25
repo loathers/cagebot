@@ -1,7 +1,7 @@
 import { DietResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
 import { KoLClient } from "../utils/KoLClient";
-import { Diet, Settings, PrivateMessage, KoLStatus } from "../utils/Typings";
+import { Diet, Settings, ChatMessage, KoLStatus } from "../utils/Typings";
 import { getLilBarrelDiet, getManualDiet, sendApiResponse } from "../utils/Utils";
 
 export class DietHandler {
@@ -58,7 +58,7 @@ export class DietHandler {
     }
   }
 
-  async maintainAdventures(message?: PrivateMessage): Promise<number> {
+  async maintainAdventures(message?: ChatMessage): Promise<number> {
     const status = await this.getClient().getStatus();
     const beforeAdv = status.adventures;
 
@@ -178,7 +178,7 @@ export class DietHandler {
     return afterAdv;
   }
 
-  async sendDiet(message: PrivateMessage) {
+  async sendDiet(message: ChatMessage) {
     console.log(
       `${message.who.name} (#${message.who.id}) requested diet information${
         message.apiRequest ? " in json format" : ""
