@@ -1,6 +1,7 @@
-import { CageBot } from "./CageBot";
+import { CageBot } from "../CageBot";
+import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { Diet, PrivateMessage, RequestResponse, RequestStatus } from "./Typings";
+import { Diet, PrivateMessage } from "./Typings";
 
 export function humanReadableTime(seconds: number): string {
   return `${Math.floor(seconds / 3600)}:${Math.floor((seconds % 3600) / 60)
@@ -13,7 +14,7 @@ export function humanReadableTime(seconds: number): string {
 export async function sendApiResponse(
   message: PrivateMessage,
   status: RequestStatus,
-  details: string
+  details: RequestStatusDetails
 ) {
   const apiStatus: RequestResponse = {
     status: status,

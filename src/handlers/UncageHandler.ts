@@ -1,6 +1,6 @@
 import { CageBot } from "../CageBot";
-import { PrivateMessage } from "../Typings";
-import { sendApiResponse } from "../Utils";
+import { PrivateMessage } from "../utils/Typings";
+import { sendApiResponse } from "../utils/Utils";
 
 export class UncageHandler {
   private _cagebot: CageBot;
@@ -83,7 +83,7 @@ export class UncageHandler {
         );
 
         if (prevStatus.apiResponses) {
-          await sendApiResponse(message, "Notification", "released_from_cage");
+          await sendApiResponse(message, "Notification", "your_clan_unbaited");
         } else {
           await this._cagebot
             .getClient()

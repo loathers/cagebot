@@ -12,6 +12,7 @@ import {
   KoLClan,
   MallResult,
 } from "./Typings";
+import { RequestResponse } from "./JsonResponses";
 
 axios.defaults.timeout = 30000;
 axios.defaults.httpAgent = new httpAgent({ keepAlive: true });
@@ -313,10 +314,10 @@ export class KoLClient {
       }));
 
     newWhispers.forEach((message) => {
-      if (message.msg.match(/^[a-z]+\.api( |$)/)) {
-        this.sendPrivateMessage(message.who, '{"status":"seen"}');
+      if (message.apiRequest) {
+        message.reply(JSON.stringify({ status: "Seen" } as RequestResponse));
       } else {
-        this.sendPrivateMessage(message.who, "Message acknowledged.");
+        message.reply("Message acknowledged.");
       }
     });
 

@@ -117,3 +117,26 @@ Cagebot is used by sending in-game whispers to the account with which it is asso
   - Whether the release command is usable, and if not, how long until it will be.
   - How many adventures it has remaining.
 - `help`: Returns a help message detailing all of the above commands.
+- `diet`: More of a debug command, this tells the requester the current status of the bot's diet. How much food and drink it has remaining. Currently, the api response will return more information.
+
+## APIs
+
+Cagebot has as part of its extra functionality the ability to respond to messages in a json format which is easier for scripts to manage.
+
+Each response should not have any spaces in them, which sidesteps the issue with KoL injecting spaces into long strings as an interesting workaround for wrapped messages.
+So to parse a json response, the user is expected to strip any spaces from the message before attempting to parse it.
+
+A json response can be requested by use of appending .api to the following, `cage, status, escape, release, diet`
+The different responses can be seen in utils/JsonResponses.ts
+
+If a caging is requested through an .api request, then the unbaited by a third party warning will be sent as a json string.
+
+## Whiteboard
+
+If the bot has write access to the clan dungeon's whiteboard, then it will edit the whiteboard if it detects the whiteboard cage/uncage strings as defined in the cagebot's config.
+
+Be aware however that if you modify the default whiteboard messages of the bot, you will need to account for html entity encoding, which would need a third party library introduced.
+
+So editing the clan's whiteboard to contain the uncaged message, will have the cagebot edit the whiteboard when a caging is requested to note that it's been caged. And edit again to the uncaged message when it fails to be caged, or is released.
+
+The whiteboard message does not need to consist solely of the cagebot message, but the exact message is case sensitive.

@@ -1,7 +1,8 @@
+import { DietResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
-import { KoLClient } from "../KoLClient";
-import { Diet, DietStatus, KoLStatus, PrivateMessage, Settings } from "../Typings";
-import { getLilBarrelDiet, getManualDiet, sendApiResponse } from "../Utils";
+import { KoLClient } from "../utils/KoLClient";
+import { Diet, Settings, PrivateMessage, KoLStatus } from "../utils/Typings";
+import { getLilBarrelDiet, getManualDiet, sendApiResponse } from "../utils/Utils";
 
 export class DietHandler {
   private _diet?: Diet[];
@@ -141,7 +142,11 @@ export class DietHandler {
 
         if (message !== undefined) {
           if (message.apiRequest) {
-            await sendApiResponse(message, "Issue", "lack_edibles:" + itemIdsMissing.join(","));
+            await sendApiResponse(
+              message,
+              "Issue",
+              ("lack_edibles:" + itemIdsMissing.join(",")) as any
+            );
           } else {
             this.getClient().sendPrivateMessage(
               message.who,
@@ -208,7 +213,7 @@ export class DietHandler {
       }
     }
 
-    const dietStatus: DietStatus = {
+    const dietStatus: DietResponse = {
       possibleAdvsToday: advs,
       food: food,
       fullnessAdvs: fullAdvs,

@@ -1,10 +1,11 @@
-import { KoLClient } from "./KoLClient";
 import { Mutex } from "async-mutex";
-import { CageTask, Settings, BusyStatus, JsonStatus, PrivateMessage } from "./Typings";
 import { DietHandler } from "./handlers/DietHandler";
-import { humanReadableTime, sendApiResponse, updateWhiteboard } from "./Utils";
 import { CagingHandler } from "./handlers/CagingHandler";
 import { UncageHandler } from "./handlers/UncageHandler";
+import { BusyResponse, StatusResponse } from "./utils/JsonResponses";
+import { KoLClient } from "./utils/KoLClient";
+import { PrivateMessage, CageTask, Settings } from "./utils/Typings";
+import { humanReadableTime, updateWhiteboard, sendApiResponse } from "./utils/Utils";
 
 const mutex = new Mutex();
 
@@ -299,7 +300,7 @@ export class CageBot {
 
   private async statusReportByApi(message: PrivateMessage) {
     const status = await this.getClient().getStatus();
-    let busyStatus: BusyStatus | undefined;
+    let busyStatus: BusyResponse | undefined;
 
     if (this._amCaged || this._cageTask) {
       busyStatus = {
@@ -318,7 +319,7 @@ export class CageBot {
     }
 
     // The status is ideally one that you can strip all spaces from, and remain parsable
-    const apiStatus: JsonStatus = {
+    const apiStatus: StatusResponse = {
       advs: status.adventures,
       full: status.full,
       maxFull: 15,

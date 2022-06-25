@@ -1,12 +1,13 @@
+import { ExploredResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
-import { KoLClient } from "../KoLClient";
-import { Settings, PrivateMessage, KoLClan, ExploredStatus } from "../Typings";
+import { KoLClient } from "../utils/KoLClient";
+import { Settings, PrivateMessage, KoLClan } from "../utils/Typings";
 import {
   sendApiResponse,
   humanReadableTime,
   readGratesAndValves,
   updateWhiteboard,
-} from "../Utils";
+} from "../utils/Utils";
 
 export class CagingHandler {
   private _cagebot: CageBot;
@@ -271,6 +272,7 @@ export class CagingHandler {
         estimatedTurnsSpent--;
         caged = true;
 
+        // Here we simply choose a choice, which I believe adds our caging to the clan logs which isn't really noteworthy.
         await this.getClient().visitUrl("choice.php", {
           whichchoice: 211,
           option: 2,
@@ -402,7 +404,7 @@ export class CagingHandler {
     );
 
     if (message.apiRequest) {
-      const hoboStatus: ExploredStatus = {
+      const hoboStatus: ExploredResponse = {
         caged: this._cagebot.isCaged(),
         advsUsed: spentAdvs,
         advsLeft: endAdvs,
