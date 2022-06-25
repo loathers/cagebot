@@ -27,6 +27,10 @@ export class DietHandler {
     return this._maxDrunk;
   }
 
+  setMaxDrunk(maxDrunk: number) {
+    this._maxDrunk = maxDrunk;
+  }
+
   async doSetup() {
     if (!this._cagebot.isCaged() && !this._maxDrunk) {
       if (/>Liver of Steel<\/a>/.test(await this.getClient().visitUrl("charsheet.php"))) {
@@ -156,18 +160,18 @@ export class DietHandler {
         }
       }
     } else {
+      const advsGained = afterAdv - beforeAdv;
+
       // If it didn't restore enough adventures and we definitely did gain adventures
       if (beforeAdv < afterAdv && afterAdv <= this.getSettings().maintainAdventures) {
         console.log(
-          `Diet success! We gained ${
-            afterAdv - beforeAdv
-          } adventures! However we're below our threshold so we're going to call this again.`
+          `Diet success! We gained ${advsGained} adventures! However we're below our threshold so we're going to call this again.`
         );
         return this.maintainAdventures(message);
       }
 
       console.log(
-        `Diet success! We previously had ${beforeAdv} adventures, now we have ${afterAdv} adventures!`
+        `Diet success! Gained ${advsGained} adventures! Sastified with ${afterAdv} total adventures!`
       );
     }
 

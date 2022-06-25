@@ -353,6 +353,8 @@ export class CagingHandler {
           `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
         );
       }
+
+      await this._cagebot.saveSettings();
     } else {
       // Also clears working task
       this._cagebot.setCagedStatus(false);

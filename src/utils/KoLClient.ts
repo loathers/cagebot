@@ -262,6 +262,7 @@ export class KoLClient {
         full: 14,
         equipment: new Map(),
         rollover: Date.now(),
+        turnsPlayed: 0,
       };
     }
 
@@ -281,6 +282,7 @@ export class KoLClient {
       familiar: apiResponse["familiar"] ? parseInt(apiResponse["familiar"]) : undefined,
       equipment: equipment,
       rollover: parseInt(apiResponse["rollover"]),
+      turnsPlayed: parseInt(apiResponse["turnsplayed"]) || 0,
     };
   }
 

@@ -5,7 +5,13 @@ import { UncageHandler } from "./handlers/UncageHandler";
 import { BusyResponse, StatusResponse } from "./utils/JsonResponses";
 import { KoLClient } from "./utils/KoLClient";
 import { PrivateMessage, CageTask, Settings } from "./utils/Typings";
-import { humanReadableTime, updateWhiteboard, sendApiResponse } from "./utils/Utils";
+import {
+  humanReadableTime,
+  updateWhiteboard,
+  sendApiResponse,
+  saveSettings,
+  loadSettings,
+} from "./utils/Utils";
 
 const mutex = new Mutex();
 
@@ -48,6 +54,41 @@ export class CageBot {
   setCagedStatus(caged: boolean, task?: CageTask) {
     this._amCaged = caged;
     this._cageTask = task;
+  }
+
+  async saveSettings() {
+    if (!this.getDietHandler().getMaxDrunk()) {
+      return;
+    }
+
+    const status = await this.getClient().getStatus();
+
+    saveSettings(status.turnsPlayed, this.getDietHandler().getMaxDrunk() || 14, this.getCageTask());
+  }
+
+  async loadSettings() {
+    // If the bot is not caged, or its busy, or it has a cage task already
+    if (!this.isCaged() || this.isBusy() || this._cageTask) {
+      return;
+    }
+
+    const settings = loadSettings();
+
+    if (!settings || !settings.validAtTurn) {
+      return;
+    }
+
+    const status = await this.getClient().getStatus();
+
+    // If this was saved at turn X, but the current turn has differed
+    if (settings.validAtTurn != status.adventures) {
+      return;
+    }
+
+    this.getDietHandler().setMaxDrunk(settings.maxDrunk);
+    this._cageTask = settings.cageTask;
+
+    console.log("Loaded previous state from saved file");
   }
 
   start(): void {
@@ -100,6 +141,7 @@ export class CageBot {
     await this.doSetup();
 
     if (this.isCaged()) {
+      await this.loadSettings();
       return;
     }
 
@@ -138,7 +180,7 @@ export class CageBot {
   async doSetup(): Promise<void> {
     await this.testForThirdPartyUncaging();
 
-    this.getDietHandler().doSetup();
+    await this.getDietHandler().doSetup();
 
     if (!this._amCaged) {
       await this._diet.maintainAdventures();

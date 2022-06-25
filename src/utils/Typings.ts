@@ -5,6 +5,12 @@ export type CageTask = {
   apiResponses: boolean;
 };
 
+export type SavedSettings = {
+  validAtTurn: number;
+  maxDrunk: number;
+  cageTask?: CageTask;
+};
+
 export type Diet = {
   type: "food" | "drink";
   id: number; // Item ID
@@ -73,6 +79,7 @@ export type EquipSlot =
   | "cardsleeve";
 
 export type KoLStatus = {
+  turnsPlayed: number;
   adventures: number;
   full: number;
   drunk: number;

@@ -1,7 +1,10 @@
 import { CageBot } from "../CageBot";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { Diet, PrivateMessage } from "./Typings";
+import { CageTask, Diet, PrivateMessage, SavedSettings } from "./Typings";
+import { readFileSync, writeFileSync } from "fs";
+
+const savedFileName: string = "./runtime_state.json";
 
 export function humanReadableTime(seconds: number): string {
   return `${Math.floor(seconds / 3600)}:${Math.floor((seconds % 3600) / 60)
@@ -22,6 +25,52 @@ export async function sendApiResponse(
   };
 
   message.reply(JSON.stringify(apiStatus));
+}
+
+export function saveSettings(turnsPlayed: number, maxDrunk: number, task?: CageTask) {
+  writeFileSync(
+    savedFileName,
+    JSON.stringify({
+      validAtTurn: turnsPlayed,
+      maxDrunk: maxDrunk,
+      cageTask: task,
+    } as SavedSettings),
+    "utf-8"
+  );
+}
+
+export function loadSettings(): SavedSettings | undefined {
+  const file = readFileSync(savedFileName, "utf-8");
+
+  if (!file) {
+    return undefined;
+  }
+
+  try {
+    const json = JSON.parse(file);
+
+    const settings: SavedSettings = {
+      validAtTurn: parseInt(json["validAtTurn"]),
+      maxDrunk: parseInt(json["maxDrunk"]),
+    };
+
+    if (json["cageTask"]) {
+      const task = json["cageTask"];
+
+      settings.cageTask = {
+        requester: task["requester"],
+        clan: task["clan"],
+        started: parseInt(task["started"]),
+        apiResponses: task["apiResponses"] == "true",
+      };
+    }
+
+    return settings;
+  } catch {
+    console.log("Failed to read saved runtime state");
+  }
+
+  return undefined;
 }
 
 export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
