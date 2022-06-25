@@ -184,14 +184,7 @@ export class DietHandler {
         message.apiRequest ? " in json format" : ""
       }.`
     );
-    if (message.apiRequest) {
-      this.sendDietByApi(message);
-    } else {
-      this.sendDietByNonApi(message);
-    }
-  }
 
-  async sendDietByApi(message: PrivateMessage) {
     const inventory: Map<number, number> = await this.getClient().getInventory();
     const status = await this.getClient().getStatus();
     const level = status.level;
@@ -210,45 +203,30 @@ export class DietHandler {
 
       if (diet.type == "food") {
         food += count * diet.fullness;
-        fullAdvs += count * diet.fullness * diet.estAdvs;
+        fullAdvs += count * diet.estAdvs;
       } else {
         drink += count * diet.fullness;
-        drunkAdvs += count * diet.fullness * diet.estAdvs;
+        drunkAdvs += count * diet.estAdvs;
       }
     }
 
-    const dietStatus: DietResponse = {
-      possibleAdvsToday: advs,
-      food: food,
-      fullnessAdvs: fullAdvs,
-      drink: drink,
-      drunknessAdvs: drunkAdvs,
-    };
+    if (message.apiRequest) {
+      const dietStatus: DietResponse = {
+        possibleAdvsToday: advs,
+        food: food,
+        fullnessAdvs: fullAdvs,
+        drink: drink,
+        drunknessAdvs: drunkAdvs,
+      };
 
-    await this.getClient().sendPrivateMessage(message.who, JSON.stringify(dietStatus));
-  }
-
-  async sendDietByNonApi(message: PrivateMessage) {
-    const inventory: Map<number, number> = await this.getClient().getInventory();
-    let food: number = 0;
-    let drink: number = 0;
-
-    for (let diet of this._diet || []) {
-      if (!inventory.has(diet.id)) {
-        continue;
-      }
-
-      if (diet.type == "food") {
-        food += inventory.get(diet.id) || 0;
-      } else {
-        drink += inventory.get(diet.id) || 0;
-      }
+      await this.getClient().sendPrivateMessage(message.who, JSON.stringify(dietStatus));
+    } else {
+      await message.reply(`My remaining diet today has an expected outcome of ${advs} adventures.`);
+      await message.reply(`I have enough food for ${food} fullness and ${fullAdvs} adventures.`);
+      await message.reply(
+        `I have enough drinks for another ${drink} inebriety and ${drunkAdvs} adventures.`
+      );
     }
-
-    await this.getClient().sendPrivateMessage(
-      message.who,
-      `We have ${food} sticks of bread, ${drink} barrels of booze`
-    );
   }
 
   getPossibleAdventuresFromDiet(status: KoLStatus, inv: Map<number, number>): number {
