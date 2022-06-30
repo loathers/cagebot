@@ -29,6 +29,7 @@ export type BusyResponse = {
 };
 
 export type StatusResponse = {
+  type: "status";
   advs: number; // Adventures remaining
   full: number; // Current fullness used
   maxFull: number; // Max fullness, absent if we don't know
@@ -39,6 +40,7 @@ export type StatusResponse = {
 };
 
 export type DietResponse = {
+  type: "diet";
   possibleAdvsToday: number; // Possible adventures we can get from our diet
   food: number; // Count of total fullness our current supply can provide
   fullnessAdvs: number; // Total adventures our food would give
@@ -47,11 +49,13 @@ export type DietResponse = {
 };
 
 export type RequestResponse = {
+  type: "notif";
   status: RequestStatus; // Used when its a request that is possibly blocking
   details?: string; // The details about why we sent this response
 };
 
 export type ExploredResponse = {
+  type: "explored";
   caged: boolean; // If we're caged in the end
   advsUsed: number; // Adventures taken
   advsLeft: number; // Adventures remaining

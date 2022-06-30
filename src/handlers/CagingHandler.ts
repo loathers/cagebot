@@ -7,6 +7,7 @@ import {
   humanReadableTime,
   readGratesAndValves,
   updateWhiteboard,
+  toJson,
 } from "../utils/Utils";
 
 export class CagingHandler {
@@ -166,7 +167,7 @@ export class CagingHandler {
       apiResponses: message.apiRequest,
       autoRelease:
         autoEscapeMessage &&
-        (await this._cagebot.getClient().getWriteableClanWhiteboard())?.includes(autoEscapeMessage)
+        (await this._cagebot.getClient().getClanWhiteboard()).text.includes(autoEscapeMessage)
           ? true
           : false,
     });
@@ -186,7 +187,7 @@ export class CagingHandler {
     let estimatedTurnsSpent: number = 0;
     let totalTurnsSpent: number = 0;
     let failedToMaintain = false;
-    updateWhiteboard(this._cagebot, true);
+    await updateWhiteboard(this._cagebot, true);
 
     if (this.getSettings().openEverything) {
       console.log(
@@ -288,7 +289,7 @@ export class CagingHandler {
 
         if (escapeCageToOpenGratesAndValves()) {
           console.log(`Escaping cage to continue opening grates and twisting valves!`);
-          await this._cagebot.chewOut();
+          await this._cagebot.chewOut(undefined, true);
           estimatedTurnsSpent += 10;
           timesChewedOut++;
           caged = false;
@@ -395,7 +396,7 @@ export class CagingHandler {
         }
       }
 
-      updateWhiteboard(this._cagebot, this._cagebot.isCaged());
+      await updateWhiteboard(this._cagebot, this._cagebot.isCaged());
     }
 
     const endAdvs = (await this.getClient().getStatus()).adventures;
@@ -417,6 +418,7 @@ export class CagingHandler {
 
     if (message.apiRequest) {
       const hoboStatus: ExploredResponse = {
+        type: "explored",
         caged: this._cagebot.isCaged(),
         advsUsed: spentAdvs,
         advsLeft: endAdvs,
@@ -427,7 +429,7 @@ export class CagingHandler {
         chews: timesChewedOut,
       };
 
-      await this.getClient().sendPrivateMessage(message.who, JSON.stringify(hoboStatus));
+      await this.getClient().sendPrivateMessage(message.who, toJson(hoboStatus));
     } else {
       await this.getClient().sendPrivateMessage(
         message.who,

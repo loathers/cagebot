@@ -11,6 +11,7 @@ import {
   sendApiResponse,
   saveSettings,
   loadSettings,
+  toJson,
 } from "./utils/Utils";
 
 const mutex = new Mutex();
@@ -75,13 +76,15 @@ export class CageBot {
     const settings = loadSettings();
 
     if (!settings || !settings.validAtTurn) {
+      console.log("Unable to load valid runstate");
       return;
     }
 
     const status = await this.getClient().getStatus();
 
     // If this was saved at turn X, but the current turn has differed
-    if (settings.validAtTurn != status.adventures) {
+    if (settings.validAtTurn != status.turnsPlayed) {
+      console.log("Runstate differs from expected, not loading.");
       return;
     }
 
@@ -133,7 +136,7 @@ export class CageBot {
 
     if (!this._amCaged) {
       this._cageTask = undefined;
-      updateWhiteboard(this, this._amCaged);
+      await updateWhiteboard(this, this._amCaged);
     }
   }
 
@@ -142,6 +145,7 @@ export class CageBot {
     await this.getClient().useChatMacro("/listenon Hobopolis");
 
     if (this.isCaged()) {
+      console.log("We appear to be caged.");
       await this.loadSettings();
       return;
     }
@@ -209,12 +213,12 @@ export class CageBot {
       return;
     }
 
-    await mutex.runExclusive(async () => {
+    mutex.runExclusive(async () => {
       await toCall();
     });
   }
 
-  async processHobopolisMessage(message: ChatMessage) {
+  async processHobopolisMessage(message: ChatMessage): Promise<void> {
     // If not a clan dungeon announcement
     if (!message.who || message.who.id !== "-2") {
       return;
@@ -222,7 +226,7 @@ export class CageBot {
 
     const task = this._cageTask;
 
-    if (!this._amCaged || !task || !task.requester) {
+    if (!this._amCaged || !task || !task.requester || !task.autoRelease) {
       return;
     }
 
@@ -233,26 +237,21 @@ export class CageBot {
       return;
     }
 
-    // Requester made it through the sewers
-    mutex.runExclusive(() => {
-      if (!this._amCaged || this._cageTask !== task) {
-        return;
-      }
+    console.log(
+      `${task.requester.name} (#${task.requester.id}) has made it through the sewers. Requesting escape as per whiteboard.`
+    );
 
-      if (!task.autoRelease) {
-        return;
-      }
+    // Requester made it through the sewers. Add to private messages.
+    const fakeMessage: ChatMessage = {
+      private: true,
+      who: task.requester,
+      msg: `escape${task.apiResponses ? ".api" : ""}`,
+      apiRequest: task.apiResponses,
+      reply: async (message: string) =>
+        await this.getClient().sendPrivateMessage(task.requester, message),
+    };
 
-      const fakeMessage: ChatMessage = {
-        private: true,
-        who: task.requester,
-        msg: "escape",
-        apiRequest: task.apiResponses,
-        reply: (message: string) => this.getClient().sendPrivateMessage(task.requester, message),
-      };
-
-      this._uncageHandler.escapeCage(fakeMessage);
-    });
+    this._privateMessages.push(fakeMessage);
   }
 
   async processMessage(): Promise<void> {
@@ -261,30 +260,29 @@ export class CageBot {
     if (message) {
       if (!message.private) {
         await this.processHobopolisMessage(message);
-        return;
-      }
-
-      console.log(
-        `Processing whisper${message.apiRequest ? ".api" : ""} from ${message.who.name} (#${
-          message.who.id
-        })`
-      );
-      const processedMsg = message.msg.toLowerCase();
-
-      if (processedMsg.startsWith("cage")) {
-        await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message));
-      } else if (processedMsg.startsWith("release")) {
-        await this.runBlockingRequest(message, () => this._uncageHandler.releaseCage(message));
-      } else if (processedMsg.startsWith("escape")) {
-        await this.runBlockingRequest(message, () => this._uncageHandler.escapeCage(message));
-      } else if (processedMsg.startsWith("status")) {
-        await this.sendStatus(message, true);
-      } else if (processedMsg.startsWith("diet")) {
-        await this._diet.sendDiet(message);
-      } else if (processedMsg.startsWith("help")) {
-        await this.sendHelp(message);
       } else {
-        await this.didntUnderstand(message);
+        console.log(
+          `Processing whisper${message.apiRequest ? ".api" : ""} from ${message.who.name} (#${
+            message.who.id
+          })`
+        );
+        const processedMsg = message.msg.toLowerCase();
+
+        if (processedMsg.startsWith("cage")) {
+          await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message));
+        } else if (processedMsg.startsWith("release")) {
+          await this.runBlockingRequest(message, () => this._uncageHandler.releaseCage(message));
+        } else if (processedMsg.startsWith("escape")) {
+          await this.runBlockingRequest(message, () => this._uncageHandler.escapeCage(message));
+        } else if (processedMsg.startsWith("status")) {
+          await this.sendStatus(message, true);
+        } else if (processedMsg.startsWith("diet")) {
+          await this._diet.sendDiet(message);
+        } else if (processedMsg.startsWith("help")) {
+          await this.sendHelp(message);
+        } else {
+          await this.didntUnderstand(message);
+        }
       }
 
       this.processMessage();
@@ -409,6 +407,7 @@ export class CageBot {
 
     // The status is ideally one that you can strip all spaces from, and remain parsable
     const apiStatus: StatusResponse = {
+      type: "status",
       advs: status.adventures,
       full: status.full,
       maxFull: 15,
@@ -418,7 +417,7 @@ export class CageBot {
       status: busyStatus,
     };
 
-    await message.reply(JSON.stringify(apiStatus));
+    await message.reply(toJson(apiStatus));
   }
 
   async didntUnderstand(message: ChatMessage): Promise<void> {
@@ -434,14 +433,14 @@ export class CageBot {
       throw "Tried to find time in cage with no cagestatus.";
     }
 
-    return (Date.now() - this._cageTask.started) / 1000;
+    return Math.floor((Date.now() - this._cageTask.started) / 1000);
   }
 
   releaseable(): boolean {
     return this.secondsInTask() > 3600;
   }
 
-  async chewOut(message?: ChatMessage): Promise<void> {
+  async chewOut(message?: ChatMessage, skipWhiteboard?: boolean): Promise<void> {
     await this.testForThirdPartyUncaging();
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {
@@ -468,7 +467,11 @@ export class CageBot {
 
     this._amCaged = false;
     this._cageTask = undefined;
-    updateWhiteboard(this, this._amCaged);
+
+    if (!skipWhiteboard) {
+      await updateWhiteboard(this, this._amCaged);
+    }
+
     await this._diet.maintainAdventures(message);
   }
 }

@@ -2,7 +2,7 @@ import { DietResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
 import { KoLClient } from "../utils/KoLClient";
 import { Diet, Settings, ChatMessage, KoLStatus } from "../utils/Typings";
-import { getLilBarrelDiet, getManualDiet, sendApiResponse } from "../utils/Utils";
+import { getLilBarrelDiet, getManualDiet, sendApiResponse, toJson } from "../utils/Utils";
 
 export class DietHandler {
   private _diet?: Diet[];
@@ -212,6 +212,7 @@ export class DietHandler {
 
     if (message.apiRequest) {
       const dietStatus: DietResponse = {
+        type: "diet",
         possibleAdvsToday: advs,
         food: food,
         fullnessAdvs: fullAdvs,
@@ -219,7 +220,7 @@ export class DietHandler {
         drunknessAdvs: drunkAdvs,
       };
 
-      await this.getClient().sendPrivateMessage(message.who, JSON.stringify(dietStatus));
+      await this.getClient().sendPrivateMessage(message.who, toJson(dietStatus));
     } else {
       await message.reply(`My remaining diet today has an expected outcome of ${advs} adventures.`);
       await message.reply(`I have enough food for ${food} fullness and ${fullAdvs} adventures.`);

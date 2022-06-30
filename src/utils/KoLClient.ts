@@ -11,8 +11,11 @@ import {
   KOLMessage,
   KoLClan,
   MallResult,
+  ClanWhiteboard,
 } from "./Typings";
 import { RequestResponse } from "./JsonResponses";
+import { decode } from "html-entities";
+import { splitMessage, toJson } from "./Utils";
 
 axios.defaults.timeout = 30000;
 axios.defaults.httpAgent = new httpAgent({ keepAlive: true });
@@ -224,7 +227,9 @@ export class KoLClient {
   }
 
   async sendPrivateMessage(recipient: KoLUser, message: string): Promise<void> {
-    await this.useChatMacro(`/w ${recipient.id} ${message}`);
+    for (let msg of splitMessage(message)) {
+      await this.useChatMacro(`/w ${recipient.id} ${msg}`);
+    }
   }
 
   async eat(foodID: number): Promise<void> {
@@ -320,7 +325,9 @@ export class KoLClient {
               if (msg.type === "private") {
                 await this.sendPrivateMessage(msg.who, message);
               } else {
-                await this.useChatMacro("/w Hobopolis " + message);
+                for (let msg of splitMessage(message)) {
+                  await this.useChatMacro("/w Hobopolis " + msg);
+                }
               }
             },
           } as ChatMessage)
@@ -332,7 +339,7 @@ export class KoLClient {
       }
 
       if (message.apiRequest) {
-        message.reply(JSON.stringify({ status: "Seen" } as RequestResponse));
+        message.reply(toJson({ type: "notif", status: "Seen" } as RequestResponse));
       } else {
         message.reply("Message acknowledged.");
       }
@@ -485,17 +492,32 @@ export class KoLClient {
    *
    * It will also return the text encoded in html entities, namely an issue for characters such as < or >
    */
-  async getWriteableClanWhiteboard(): Promise<string | undefined> {
+  async getClanWhiteboard(): Promise<ClanWhiteboard> {
     const response: string = await this.visitUrl("clan_basement.php?whiteboard=1");
 
+    let editable = true;
     let match = response.match(
-      /<textarea maxlength=5000 name=whiteboard rows=15 cols=60>(.*)<\/textarea><br>/s
+      /<textarea maxlength=5000 name=whiteboard rows=15 cols=60>(.*?)<\/textarea><br>/s
     );
+    let text: string = "";
 
-    if (!match) {
-      return undefined;
+    if (match) {
+      text = match[1];
+    } else {
+      editable = false;
+      match = response.match(/border: 1px solid black;'>(.*?)<\/td>/);
+
+      if (match) {
+        text = match[1]
+          .replaceAll("\n", "")
+          .replace("<i>(nothing)</i>", "") // What the whiteboard is when its empty
+          .replaceAll("<br>", "\n");
+      }
     }
 
-    return match[0];
+    return {
+      editable: editable,
+      text: decode(text.replaceAll("\r", "")),
+    };
   }
 }

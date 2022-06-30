@@ -6,6 +6,11 @@ export type CageTask = {
   autoRelease: boolean;
 };
 
+export type ClanWhiteboard = {
+  text: string;
+  editable: boolean;
+};
+
 export type SavedSettings = {
   validAtTurn: number;
   maxDrunk: number;

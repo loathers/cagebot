@@ -1,8 +1,9 @@
 import { CageBot } from "../CageBot";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { CageTask, Diet, ChatMessage, SavedSettings } from "./Typings";
+import { CageTask, Diet, ChatMessage, SavedSettings, ClanWhiteboard } from "./Typings";
 import { readFileSync, writeFileSync } from "fs";
+import { decode, encode } from "html-entities";
 
 const savedFileName: string = "./runtime_state.json";
 
@@ -14,17 +15,52 @@ export function humanReadableTime(seconds: number): string {
     .padStart(2, "0")}`;
 }
 
+/**
+ * Used to split a message to fit into KOL's message limits
+ *
+ * 260 is the rough limit, but given it injects spaces in 20+ long words. Lower that to 245
+ */
+export function splitMessage(message: string, limit: number = 245): string[] {
+  let encodedRemainder = encode(message);
+  let messages: string[] = [];
+
+  if (encodedRemainder.length > limit) {
+    let end = limit;
+    let toSnip: string;
+
+    // Make sure we don't leave html entities out
+    while (
+      !message.includes((toSnip = decode(encodedRemainder.substring(0, end)))) ||
+      !message.includes(decode(encodedRemainder.substring(end)))
+    ) {
+      end--;
+    }
+
+    encodedRemainder = encodedRemainder.substring(end);
+    messages.push(toSnip);
+  }
+
+  messages.push(decode(encodedRemainder));
+
+  return messages;
+}
+
+export function toJson(object: any) {
+  return JSON.stringify(object).replaceAll(" ", "%20");
+}
+
 export async function sendApiResponse(
   message: ChatMessage,
   status: RequestStatus,
   details: RequestStatusDetails
 ) {
   const apiStatus: RequestResponse = {
+    type: "notif",
     status: status,
     details: details,
   };
 
-  message.reply(JSON.stringify(apiStatus));
+  message.reply(toJson(apiStatus));
 }
 
 export function saveSettings(turnsPlayed: number, maxDrunk: number, task?: CageTask) {
@@ -83,16 +119,20 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
     return;
   }
 
-  let whiteboard = await cagebot.getClient().getWriteableClanWhiteboard();
+  let whiteboard: ClanWhiteboard = await cagebot.getClient().getClanWhiteboard();
 
   if (!whiteboard) {
+    return;
+  }
+
+  if (!whiteboard.editable) {
     return;
   }
 
   const username = cagebot.getClient().getUsername() || "";
   const userid = cagebot.getClient().getUserID() || "";
 
-  if (!username) {
+  if (!username || !userid) {
     return;
   }
 
@@ -109,21 +149,23 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
     return;
   }
 
+  let text = whiteboard.text;
+
   if (setCaged) {
-    if (!whiteboard.includes(unoccupied)) {
+    if (!text.includes(unoccupied)) {
       return;
     }
 
-    whiteboard = whiteboard.replaceAll(unoccupied, occupied);
+    text = text.replaceAll(unoccupied, occupied);
   } else {
-    if (!whiteboard.includes(occupied)) {
+    if (!text.includes(occupied)) {
       return;
     }
 
-    whiteboard = whiteboard.replaceAll(occupied, unoccupied);
+    text = text.replaceAll(occupied, unoccupied);
   }
 
-  await cagebot.getClient().setClanWhiteboard(whiteboard);
+  await cagebot.getClient().setClanWhiteboard(text);
 }
 
 export async function readGratesAndValves(client: KoLClient): Promise<[number, number]> {
