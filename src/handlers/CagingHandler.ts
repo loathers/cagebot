@@ -90,7 +90,7 @@ export class CagingHandler {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "clan_ambiguous");
       } else {
-        this.getClient().sendPrivateMessage(
+        await this.getClient().sendPrivateMessage(
           message.who,
           `I'm in multiple clans named ${clanName}: ${whitelists.join(
             ", "
@@ -107,7 +107,7 @@ export class CagingHandler {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "not_whitelisted");
       } else {
-        this.getClient().sendPrivateMessage(
+        await this.getClient().sendPrivateMessage(
           message.who,
           `I'm not in any clans named ${clanName}. Check your spelling, or ensure I have a whitelist.`
         );

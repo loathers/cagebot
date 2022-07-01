@@ -12,6 +12,7 @@ import {
   KoLClan,
   MallResult,
   ClanWhiteboard,
+  CombatMacro,
 } from "./Typings";
 import { RequestResponse } from "./JsonResponses";
 import { decode } from "html-entities";
@@ -406,13 +407,77 @@ export class KoLClient {
     return map;
   }
 
-  async createMacro(name: string, macro: string): Promise<void> {
+  async getCombatMacros(): Promise<CombatMacro[]> {
+    const apiResponse = (await this.visitUrl("account_combatmacros.php")) as string;
+
+    if (!apiResponse) {
+      return [];
+    }
+
+    const macros: CombatMacro[] = [];
+
+    const match = apiResponse.matchAll(/<option value="(\d+)">(.*?)<\/option>/);
+
+    for (let [id, name] of match) {
+      macros.push({ id: id, name: name });
+    }
+
+    return macros;
+  }
+
+  async getCombatMacro(macro: CombatMacro): Promise<string> {
+    const apiResponse = await this.visitUrl("account_combatmacros", {
+      macroid: macro.id,
+      action: "edit",
+      what: "Edit",
+    });
+
+    if (!apiResponse) {
+      return "";
+    }
+
+    return decode(apiResponse.match(/">(.*?)<\/textarea>/))[1];
+  }
+
+  async createCombatMacro(name: string, macro: string): Promise<void> {
     await this.visitUrl("account_combatmacros.php", {
       macroid: "0",
       name: name,
       macrotext: macro,
       action: "save",
     });
+  }
+
+  async setAutoAttackMacro(macro?: CombatMacro): Promise<void> {
+    await this.visitUrl("account.php", {
+      am: "1",
+      action: "autoattack",
+      value: macro ? macro?.id : "0",
+    });
+  }
+
+  async getAutoAttackMacro(): Promise<CombatMacro | undefined> {
+    const apiResponse = await this.visitUrl(
+      `account.php?action=loadtab&value=combat&pwd=${this._credentials?.pwdhash}`
+    );
+
+    if (!apiResponse) {
+      return undefined;
+    }
+
+    // Will only match on a combat macro, not a skill
+    const match = apiResponse.match(
+      /<option selected="selected" value="(\d+)">([^<]*?) \(Combat Macro\)<\/option>/
+    );
+
+    if (!match) {
+      return undefined;
+    }
+
+    return {
+      id: match[1],
+      name: match[2],
+    };
   }
 
   async searchMall(itemName: string): Promise<MallResult[]> {
@@ -510,8 +575,8 @@ export class KoLClient {
       if (match) {
         text = match[1]
           .replaceAll("\n", "")
-          .replace("<i>(nothing)</i>", "") // What the whiteboard is when its empty
-          .replaceAll("<br>", "\n");
+          .replaceAll("<br>", "\n")
+          .replace("<i>(nothing)</i>", ""); // What the whiteboard is when its empty;
       }
     }
 

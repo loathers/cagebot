@@ -138,7 +138,7 @@ export class DietHandler {
           if (message.apiRequest) {
             await sendApiResponse(message, "Issue", "lack_barrel_edibles");
           } else {
-            message.reply(`Please tell my operator that I am out of consumables.`);
+            await message.reply(`Please tell my operator that I am out of consumables.`);
           }
         }
       } else {
@@ -152,7 +152,7 @@ export class DietHandler {
               ("lack_edibles:" + itemIdsMissing.join(",")) as any
             );
           } else {
-            this.getClient().sendPrivateMessage(
+            await this.getClient().sendPrivateMessage(
               message.who,
               `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
             );

@@ -67,6 +67,11 @@ export type KoLClan = {
   id: string;
 };
 
+export type CombatMacro = {
+  name: string;
+  id: string;
+};
+
 export type MallResult = {
   storeId: number;
   itemId: number;

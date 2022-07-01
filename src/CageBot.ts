@@ -13,6 +13,8 @@ import {
   loadSettings,
   toJson,
 } from "./utils/Utils";
+import { settings } from "cluster";
+import { readFileSync } from "fs";
 
 const mutex = new Mutex();
 
@@ -111,6 +113,8 @@ export class CageBot {
         const secondsToRollover = await this._client.getSecondsToRollover();
 
         console.log("The next rollover is in " + humanReadableTime(secondsToRollover));
+        console.log(`Settings: ${JSON.stringify(this._settings)}`);
+
         console.log("Initial setup complete. Polling messages.");
 
         setInterval(async () => {
@@ -150,18 +154,37 @@ export class CageBot {
       return;
     }
 
-    if (!/CAGEBOT/.test(await this._client.visitUrl("account_combatmacros.php"))) {
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      console.log("!!! In order to function, this account!!!");
-      console.log("!!! MUST have a macro named CAGEBOT   !!!");
-      console.log('!!! reading "runaway;repeat;". Please !!!');
-      console.log("!!! make that now and rerun.          !!!");
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      throw "\nCombat Macro not found, Combat Macro required to continue.\n";
+    let macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
+    const macroText = readFileSync("CombatMacro.txt", "utf-8");
+
+    if (!macro) {
+      console.log("Combat Macro not found, we will be saving the default!");
+
+      await this.getClient().createCombatMacro("CAGEBOT", macroText);
+      macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
+
+      if (!macro) {
+        throw "Failed to create the CAGEBOT macro!";
+      }
+    } else {
+      const theirMacro = await this.getClient().getCombatMacro(macro);
+
+      if (theirMacro !== macroText) {
+        console.log("Custom CAGEBOT macro detected! This is probably fine.");
+      }
+    }
+
+    const currentMacro = await this.getClient().getAutoAttackMacro();
+
+    if (!currentMacro || currentMacro.name !== "CAGEBOT") {
+      if (!currentMacro) {
+        console.log("AutoAttack macro is missing, changing that to CAGEBOT");
+        await this.getClient().setAutoAttackMacro(macro);
+      } else {
+        console.log(
+          "AutoAttack Macro is not CAGEBOT, will leave untouched but this may be an error."
+        );
+      }
     }
 
     const combatTab = await this._client.visitUrl("account.php", {
