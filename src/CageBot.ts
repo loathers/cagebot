@@ -113,8 +113,6 @@ export class CageBot {
         const secondsToRollover = await this._client.getSecondsToRollover();
 
         console.log("The next rollover is in " + humanReadableTime(secondsToRollover));
-        console.log(`Settings: ${JSON.stringify(this._settings)}`);
-
         console.log("Initial setup complete. Polling messages.");
 
         setInterval(async () => {

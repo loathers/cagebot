@@ -169,7 +169,8 @@ export class KoLClient {
   async visitUrl(
     url: string,
     parameters: Record<string, any> = {},
-    pwd: Boolean = true
+    pwd: Boolean = true,
+    data?: any
   ): Promise<any> {
     if (this._isRollover || (await this.getSecondsToRollover()) <= 1) {
       return null;
@@ -186,6 +187,7 @@ export class KoLClient {
           ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
           ...parameters,
         },
+        data: data,
       });
 
       if (page.headers["set-cookie"] && this._credentials != null) {
@@ -416,9 +418,9 @@ export class KoLClient {
 
     const macros: CombatMacro[] = [];
 
-    const match = apiResponse.matchAll(/<option value="(\d+)">(.*?)<\/option>/);
+    const match = apiResponse.matchAll(/<option value="(\d+)">(.*?)<\/option>/g);
 
-    for (let [id, name] of match) {
+    for (let [, id, name] of match) {
       macros.push({ id: id, name: name });
     }
 
@@ -426,17 +428,18 @@ export class KoLClient {
   }
 
   async getCombatMacro(macro: CombatMacro): Promise<string> {
-    const apiResponse = await this.visitUrl("account_combatmacros", {
-      macroid: macro.id,
-      action: "edit",
-      what: "Edit",
-    });
+    const apiResponse = await this.visitUrl(
+      "account_combatmacros.php",
+      {},
+      false,
+      `macroid=${macro.id}&action=edit&what=Edit`
+    );
 
     if (!apiResponse) {
       return "";
     }
 
-    return decode(apiResponse.match(/">(.*?)<\/textarea>/))[1];
+    return decode(apiResponse.match(/">([^>]*?)<\/textarea>/s)[1]);
   }
 
   async createCombatMacro(name: string, macro: string): Promise<void> {
@@ -486,17 +489,17 @@ export class KoLClient {
     )) as string;
 
     const matches = apiResponse.matchAll(
-      /href="mallstore\.php\?whichstore=(\d+)&searchitem=(\d+)&searchprice=(\d+)"><b>.+?"small stock">([\d,]+)<\/td>.*?<td class="small">(?:(\d+)&nbsp;\/&nbsp;day&nbsp;&nbsp;&nbsp;<\/td>)?/
+      /href="mallstore\.php\?whichstore=(\d+)&searchitem=(\d+)&searchprice=(\d+)"><b>.+?"small stock">([\d,]+)<\/td>.*?<td class="small">(?:(\d+)&nbsp;\/&nbsp;day&nbsp;&nbsp;&nbsp;<\/td>)?/g
     );
 
     let results: MallResult[] = [];
 
     for (let result of matches) {
-      const storeId = parseInt(result[0]);
-      const itemId = parseInt(result[1]);
-      const price = parseInt(result[2]);
-      const stockLevel = parseInt(result[3].replaceAll(",", ""));
-      const limit = result[4] == null ? undefined : parseInt(result[4].replaceAll(",", ""));
+      const storeId = parseInt(result[1]);
+      const itemId = parseInt(result[2]);
+      const price = parseInt(result[3]);
+      const stockLevel = parseInt(result[4].replaceAll(",", ""));
+      const limit = result[5] == null ? undefined : parseInt(result[5].replaceAll(",", ""));
 
       results.push({
         storeId: storeId,
