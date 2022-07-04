@@ -187,6 +187,7 @@ export class CagingHandler {
     let estimatedTurnsSpent: number = 0;
     let totalTurnsSpent: number = 0;
     let failedToMaintain = false;
+    let triedToRescue: boolean = false;
     await updateWhiteboard(this._cagebot, true);
 
     if (this.getSettings().openEverything) {
@@ -321,14 +322,17 @@ export class CagingHandler {
           estimatedTurnsSpent--; // Free turn
         }
       } else if (/The Former or the Ladder/.test(adventureResponse)) {
-        // Funny enough, this is not a free turn. But we're going to try release our clanmate even though the water means another fight.
-        // Why? Because we will never leave a clanmate to suffer.
-        // I'm looking at you. You leave the bot to cry in a cage.
-        // This bot knows how bad it feels, this bot will never left someone suffer as it does.
+        // Funny enough, this is not a free turn. But we're going to try once to release any trapped clanmates.
+
+        // 2 = Fight a C. H. U. M.
+        // 3 = Rescue
+        const option = triedToRescue ? 2 : 3;
+        // Always set this to true so follow up encounters to this NC will result in a fight.
+        triedToRescue = true;
 
         await this.getClient().visitUrl("choice.php", {
           whichchoice: 199,
-          option: 3,
+          option: option,
         });
       } else if (/Pop!/.test(adventureResponse)) {
         estimatedTurnsSpent--; // Free turn
