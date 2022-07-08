@@ -12,6 +12,7 @@ import {
   saveSettings,
   loadSettings,
   toJson,
+  createApiResponse,
 } from "./utils/Utils";
 import { settings } from "cluster";
 import { readFileSync } from "fs";
@@ -153,7 +154,7 @@ export class CageBot {
     }
 
     let macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
-    const macroText = readFileSync("CombatMacro.txt", "utf-8");
+    const macroText = readFileSync("./data/CombatMacro.txt", "utf-8");
 
     if (!macro) {
       console.log("Combat Macro not found, we will be saving the default!");
@@ -247,7 +248,7 @@ export class CageBot {
 
     const task = this._cageTask;
 
-    if (!this._amCaged || !task || !task.requester || !task.autoRelease) {
+    if (!this._amCaged || !task || !task.requester) {
       return;
     }
 
@@ -255,6 +256,33 @@ export class CageBot {
       message.msg.toLowerCase() !==
       `${task.requester.name.toLowerCase()} has made it through the sewer.`
     ) {
+      return;
+    }
+
+    if (!task.autoRelease) {
+      console.log(
+        `${task.requester.name} (#${task.requester.id}) has made it through the sewers. In a minute if still caged will send an escape reminder.`
+      );
+
+      setTimeout(() => {
+        // If not the same cage task, aka they were released. Return
+        if (this._cageTask != task) {
+          return;
+        }
+
+        if (task.apiResponses) {
+          this.getClient().sendPrivateMessage(
+            task.requester,
+            createApiResponse("Notification", "remember_to_unbait")
+          );
+        } else {
+          this._client.sendPrivateMessage(
+            task.requester,
+            `You've made it through the sewers! If cagebait is no longer required, whisper me "escape".`
+          );
+        }
+      }, 60000);
+
       return;
     }
 
@@ -461,7 +489,7 @@ export class CageBot {
     return this.secondsInTask() > 3600;
   }
 
-  async chewOut(message?: ChatMessage, skipWhiteboard?: boolean): Promise<void> {
+  async chewOut(skipWhiteboard?: boolean): Promise<void> {
     await this.testForThirdPartyUncaging();
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {
@@ -492,7 +520,5 @@ export class CageBot {
     if (!skipWhiteboard) {
       await updateWhiteboard(this, this._amCaged);
     }
-
-    await this._diet.maintainAdventures(message);
   }
 }

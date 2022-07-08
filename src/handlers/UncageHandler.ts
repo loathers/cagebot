@@ -39,6 +39,8 @@ export class UncageHandler {
       } else {
         await message.reply("Chewed out! I am now uncaged.");
       }
+
+      await this._cagebot.getDietHandler().maintainAdventures(message);
     }
   }
 
@@ -93,6 +95,8 @@ export class UncageHandler {
             );
         }
       }
+
+      await this._cagebot.getDietHandler().maintainAdventures(message);
     }
   }
 }

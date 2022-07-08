@@ -12,7 +12,8 @@ export type RequestStatusDetails =
   | "doing_cage"
   | "lack_barrel_edibles"
   | "lack_edibles:<Item Ids>"
-  | "your_clan_unbaited";
+  | "your_clan_unbaited"
+  | "remember_to_unbait";
 
 export type BusyResponse = {
   elapsed?: number; // Seconds in current task, absent if we don't know
@@ -49,7 +50,7 @@ export type DietResponse = {
 };
 
 export type RequestResponse = {
-  type: "notif";
+  type: "notify";
   status: RequestStatus; // Used when its a request that is possibly blocking
   details?: string; // The details about why we sent this response
 };

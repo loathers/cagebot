@@ -52,18 +52,21 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
   console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 } else {
-  const settings = JSON.parse(readFileSync("./Settings.json", "utf-8") || "{}");
+  const settings = JSON.parse(readFileSync("./data/Settings.json", "utf-8") || "{}");
 
   for (let key of Object.keys(settings)) {
     if (!process.env[key]) {
       continue;
     }
 
+    console.log(`Overriding setting '${key}=${process.env[key]}' as defined in .env`);
     (settings as any)[key] = process.env[key];
   }
 
-  settings.maintainAdventures = parseInt(settings.maintainAdventures || "100");
-  settings.openEverything = settings.openEverything === "true";
+  settings.maintainAdventures = parseInt(
+    process.env["maintainAdventures"] || settings.maintainAdventures || "100"
+  );
+  settings.openEverything = settings.openEverything === "true" ? true : false;
   settings.openEverythingWhileAdventuresAbove = parseInt(
     settings.openEverythingWhileAdventuresAbove || "80"
   );

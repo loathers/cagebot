@@ -290,7 +290,7 @@ export class CagingHandler {
 
         if (escapeCageToOpenGratesAndValves()) {
           console.log(`Escaping cage to continue opening grates and twisting valves!`);
-          await this._cagebot.chewOut(undefined, true);
+          await this._cagebot.chewOut(true);
           estimatedTurnsSpent += 10;
           timesChewedOut++;
           caged = false;
@@ -363,10 +363,16 @@ export class CagingHandler {
       console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
 
       if (!message.apiRequest) {
-        await this.getClient().sendPrivateMessage(
-          message.who,
-          `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
-        );
+        let toSend = `Clang! I am now caged in ${targetClan.name}.`;
+
+        if (this._cagebot.getCageTask() && this._cagebot.getCageTask()?.autoRelease) {
+          toSend +=
+            ' I will escape when you pass through the sewers, or you can release me later by whispering "escape" to me.';
+        } else {
+          toSend += ' Release me later by whispering "escape" to me.';
+        }
+
+        await this.getClient().sendPrivateMessage(message.who, toSend);
       }
 
       await this._cagebot.saveSettings();
@@ -411,7 +417,7 @@ export class CagingHandler {
         `We estimated ${estimatedTurnsSpent} + ${totalTurnsSpent} turns spent, ${spentAdvs} turns were actually spent.`
       );
     } else {
-      console.log(`We spent ${spentAdvs} in the process, we have ${endAdvs} turns remaining`);
+      console.log(`We spent ${spentAdvs} turns in the process, we have ${endAdvs} turns remaining`);
     }
 
     console.log(

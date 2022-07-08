@@ -342,7 +342,7 @@ export class KoLClient {
       }
 
       if (message.apiRequest) {
-        message.reply(toJson({ type: "notif", status: "Seen" } as RequestResponse));
+        message.reply(toJson({ type: "notify", status: "Seen" } as RequestResponse));
       } else {
         message.reply("Message acknowledged.");
       }

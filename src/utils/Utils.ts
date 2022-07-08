@@ -5,7 +5,7 @@ import { CageTask, Diet, ChatMessage, SavedSettings, ClanWhiteboard } from "./Ty
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
-const savedFileName: string = "./runtime_state.json";
+const savedFileName: string = "./data/runtime_state.json";
 
 export function humanReadableTime(seconds: number): string {
   return `${Math.floor(seconds / 3600)}:${Math.floor((seconds % 3600) / 60)
@@ -49,18 +49,22 @@ export function toJson(object: any) {
   return JSON.stringify(object).replaceAll(" ", "%20");
 }
 
+export function createApiResponse(status: RequestStatus, details: RequestStatusDetails): string {
+  const apiStatus: RequestResponse = {
+    type: "notify",
+    status: status,
+    details: details,
+  };
+
+  return toJson(apiStatus);
+}
+
 export async function sendApiResponse(
   message: ChatMessage,
   status: RequestStatus,
   details: RequestStatusDetails
 ) {
-  const apiStatus: RequestResponse = {
-    type: "notif",
-    status: status,
-    details: details,
-  };
-
-  message.reply(toJson(apiStatus));
+  message.reply(createApiResponse(status, details));
 }
 
 export function saveSettings(turnsPlayed: number, maxDrunk: number, task?: CageTask) {
@@ -157,12 +161,14 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
     }
 
     text = text.replaceAll(unoccupied, occupied);
+    console.log("Editing basement whiteboard to reflect that we are being caged.");
   } else {
     if (!text.includes(occupied)) {
       return;
     }
 
     text = text.replaceAll(occupied, unoccupied);
+    console.log("Editing basement whiteboard to reflect that we are not in a cage.");
   }
 
   await cagebot.getClient().setClanWhiteboard(text);
