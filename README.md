@@ -68,15 +68,16 @@ For MP Regeneration, an easy source is nurse's hat for 10-15.
 Combat %, three accessories are: Bram's Choker, Ring of Conflict, Red Shoe
 Weapon: Rusted-out Shooting' Iron
 
-The last piece of equipment isn't so easy, the best solution here would be acquiring the shirt or pants from the outfit Xiblaxian Stealth Suit.
-This however will take a few hundred thousand meat at minimum.
+The last piece of equipment isn't so easy, but you can pick up another -5% combat in the Haunted Ballroom NC for a total of -25%.
+https://kol.coldfront.net/thekolwiki/index.php/Strung-Up_Quartet
 
-You will also want to pick up a Tuxedo Shirt for more adventures from booze.
+If you don't want to do that, or want that extra -1% combat. Then the best solution here would be acquiring the shirt or pants from the outfit Xiblaxian Stealth Suit.
+This however, can be expensive to acquire.
+
+You will also optionally want to pick up a Tuxedo Shirt for more adventures from booze.
 
 And finally, you want to get as much +adv as you can.
-A clockwork maid, and perhaps a pagoda. Equipment wise, you have the offhand 'ancient calendar', and shirt 'Shoe Ad T-Shirt'
-
-Don't forget to setup the autoattack macro!
+A clockwork maid (Recommended to buy from a no-limit store), and perhaps a pagoda. Equipment wise, you have the offhand 'ancient calendar', and shirt 'Shoe Ad T-Shirt'
 
 ## INGAME SETUP SIMPLE
 
