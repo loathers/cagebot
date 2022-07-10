@@ -252,6 +252,28 @@ export class CageBot {
       return;
     }
 
+    let rescued = message.msg.match(/(.*?) has rescued (.*?) from the C. H. U. M.s./);
+
+    if (rescued != null) {
+      if (rescued[2].toLowerCase() != this._client.getMe()?.name) {
+        return;
+      }
+
+      if (this._cageTask) {
+        console.log(`${rescued[1]} rescued me from the C. H. U. M.s cage, that was nice of them.`);
+
+        // No API responses for this, a script likely would leave the cagebot in.
+        this._client.useChatMacro(
+          `/w ${rescued[1].replaceAll(
+            " ",
+            "_"
+          )} Thank you for rescuing me! You didn't have to though!`
+        );
+      }
+
+      return;
+    }
+
     if (
       message.msg.toLowerCase() !==
       `${task.requester.name.toLowerCase()} has made it through the sewer.`
