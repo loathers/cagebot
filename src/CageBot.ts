@@ -282,15 +282,17 @@ export class CageBot {
     }
 
     if (!task.autoRelease) {
-      console.log(
-        `${task.requester.name} (#${task.requester.id}) has made it through the sewers. In a minute if still caged will send an escape reminder.`
-      );
+      console.log(`${task.requester.name} (#${task.requester.id}) has made it through the sewers.`);
 
       setTimeout(() => {
         // If not the same cage task, aka they were released. Return
         if (this._cageTask != task) {
           return;
         }
+
+        console.log(
+          `A minute has passed, asking ${task.requester.name} (#${task.requester.id}) if they'd like me to escape.`
+        );
 
         if (task.apiResponses) {
           this.getClient().sendPrivateMessage(
