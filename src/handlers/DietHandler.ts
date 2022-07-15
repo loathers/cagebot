@@ -56,6 +56,30 @@ export class DietHandler {
     } else {
       this._diet = getManualDiet();
     }
+
+    await this.sortDiet();
+  }
+
+  async sortDiet() {
+    if (!this._diet) {
+      return;
+    }
+
+    const inv: Map<number, number> = await this.getClient().getInventory();
+
+    // Sort our diet so that the best foods and drinks that are available are pushed to the very top.
+    // This is so we can try even the spread of our consumed items between drink and food.
+    this._diet.sort((d1, d2) => {
+      let advs1 = d1.estAdvs / d1.fullness;
+      let advs2 = d2.estAdvs / d2.fullness;
+
+      if (advs1 == advs2 || d1.type != d2.type) {
+        advs1 *= inv.get(d1.id) || 0;
+        advs2 *= inv.get(d2.id) || 0;
+      }
+
+      return advs1 > advs2 ? -1 : 1;
+    });
   }
 
   async maintainAdventures(message?: ChatMessage): Promise<number> {
@@ -167,6 +191,7 @@ export class DietHandler {
         console.log(
           `Diet success! We gained ${advsGained} adventures! However we're below our threshold so we're going to call this again.`
         );
+
         return this.maintainAdventures(message);
       }
 
@@ -175,6 +200,7 @@ export class DietHandler {
       );
     }
 
+    await this.sortDiet();
     return afterAdv;
   }
 
