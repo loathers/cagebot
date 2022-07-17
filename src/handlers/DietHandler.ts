@@ -106,6 +106,7 @@ export class DietHandler {
     let itemsMissing: string[] = [];
     let itemIdsMissing: string[] = [];
     let consumeMessage: any;
+    let hasStomachSpace: boolean = false;
 
     for (let diet of this._diet || []) {
       if (diet.level > currentLevel) {
@@ -121,6 +122,8 @@ export class DietHandler {
       if (diet.fullness > (diet.type == "food" ? fullRemaining : drunkRemaining)) {
         continue;
       }
+
+      hasStomachSpace = true;
 
       if (diet.type == "food") {
         console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
@@ -147,6 +150,10 @@ export class DietHandler {
 
       itemConsumed = diet.name;
       break;
+    }
+
+    if (!hasStomachSpace) {
+      return beforeAdv;
     }
 
     const afterAdv = (await this.getClient().getStatus()).adventures;
