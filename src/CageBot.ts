@@ -324,7 +324,7 @@ export class CageBot {
         await this.getClient().sendPrivateMessage(task.requester, message),
     };
 
-    this._privateMessages.push(fakeMessage);
+    await this.runBlockingRequest(fakeMessage, () => this._uncageHandler.escapeCage(fakeMessage));
   }
 
   async processMessage(): Promise<void> {
