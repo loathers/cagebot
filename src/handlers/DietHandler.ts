@@ -113,17 +113,17 @@ export class DietHandler {
         continue;
       }
 
-      if ((inventory.get(diet.id) || 0) <= 0) {
-        itemsMissing.push(diet.name);
-        itemIdsMissing.push(diet.id.toString());
-        continue;
-      }
-
       if (diet.fullness > (diet.type == "food" ? fullRemaining : drunkRemaining)) {
         continue;
       }
 
       hasStomachSpace = true;
+
+      if ((inventory.get(diet.id) || 0) <= 0) {
+        itemsMissing.push(diet.name);
+        itemIdsMissing.push(diet.id.toString());
+        continue;
+      }
 
       if (diet.type == "food") {
         console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
