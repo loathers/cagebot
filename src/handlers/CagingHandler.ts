@@ -122,7 +122,7 @@ export class CagingHandler {
       `Clan name "${clanName}" matched to whitelisted clan "${targetClan.name}". Attempting to whitelist.`
     );
 
-    if (!(await this.attemptClanSwitch(message, targetClan))) {
+    if (!(await this.attemptClanSwitch(targetClan))) {
       console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
 
       if (message.apiRequest) {
@@ -155,7 +155,7 @@ export class CagingHandler {
     await this.attemptCage(message, targetClan);
   }
 
-  async attemptClanSwitch(message: ChatMessage, targetClan: KoLClan): Promise<boolean> {
+  async attemptClanSwitch(targetClan: KoLClan): Promise<boolean> {
     await this.getClient().joinClan(targetClan);
 
     if ((await this.getClient().myClan()) === targetClan.id) {
