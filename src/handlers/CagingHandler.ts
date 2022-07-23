@@ -34,15 +34,17 @@ export class CagingHandler {
 
     await this._cagebot.testForThirdPartyUncaging();
 
+    const timeToRollover = await this.getClient().getSecondsToRollover();
+
     // If rollover is less than 7 minutes away
-    if ((await this.getClient().getSecondsToRollover()) < 7 * 60) {
+    if (timeToRollover < 7 * 60) {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "rollover");
       } else {
         await this.getClient().sendPrivateMessage(
           message.who,
           `Rollover is in ${humanReadableTime(
-            await this.getClient().getSecondsToRollover()
+            timeToRollover
           )}, I do not wish to get into a bad state. Please try again after rollover.`
         );
       }
@@ -84,7 +86,11 @@ export class CagingHandler {
       clan.name.toLowerCase().includes(clanName.toLowerCase())
     );
 
-    if (whitelists.length > 1) {
+    // Sort clans by name length so that we can simply check the first clan for equality
+    whitelists.sort((c1, c2) => c1.name.length - c2.name.length);
+
+    // If there are multiple clans, and the shortest clan name isn't an exact match in name
+    if (whitelists.length > 1 && whitelists[0].name.toLowerCase() != clanName.toLowerCase()) {
       console.log(`Clan name "${clanName}" ambiguous, aborting.`);
 
       if (message.apiRequest) {
