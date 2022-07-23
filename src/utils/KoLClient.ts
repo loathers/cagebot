@@ -351,6 +351,52 @@ export class KoLClient {
     return newWhispers;
   }
 
+  async getClanLeader(clanId: string): Promise<string | undefined> {
+    const page = await this.visitUrl("showclan.php", { whichclan: clanId });
+
+    if (!page) {
+      return;
+    }
+
+    const match = page.match(
+      />Leader:<\/td><td valign=top><b><a href="showplayer\.php\?who=(\d+)">/
+    );
+
+    if (!match) {
+      return;
+    }
+
+    return match[1];
+  }
+
+  async getInactiveMember(): Promise<string | undefined> {
+    const members = (await this.visitUrl("clan_members.php")) as string;
+
+    if (!members) {
+      return;
+    }
+
+    const match = members.match(
+      /href="showplayer\.php\?who=(\d+)">[^<]+?<\/a><font color=gray><b> \(inactive\)<\/b>/
+    );
+
+    if (!match) {
+      return;
+    }
+
+    return match[1];
+  }
+
+  async transferClanLeadership(newLeader: string): Promise<boolean> {
+    const response = (await this.visitUrl("clan_admin.php", {
+      action: "changeleader",
+      newleader: newLeader,
+      confirm: "on",
+    })) as string;
+
+    return /Leadership of clan transferred. A leader is no longer you./.test(response);
+  }
+
   async getWhitelists(): Promise<KoLClan[]> {
     const clanRecuiterResponse = await this.visitUrl("clan_signup.php");
     if (!clanRecuiterResponse) return [];

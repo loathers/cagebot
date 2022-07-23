@@ -125,18 +125,55 @@ export class CagingHandler {
     await this.getClient().joinClan(targetClan);
 
     if ((await this.getClient().myClan()) !== targetClan.id) {
-      console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
+      console.log(
+        `Whitelisting to clan "${targetClan.name}" failed, checking if we can transfer leadership.`
+      );
 
-      if (message.apiRequest) {
-        await sendApiResponse(message, "Error", "unsuccessful_whitelist");
+      const currentClanLeader = await this.getClient().getClanLeader(
+        await this.getClient().myClan()
+      );
+      let switchedLeadership = false;
+
+      // If we fetched the current clan leader, and we are the leader
+      if (currentClanLeader && currentClanLeader === this.getClient().getMe()?.id) {
+        const inactiveMember = await this.getClient().getInactiveMember();
+
+        // If we found an inactive clan member
+        if (inactiveMember) {
+          console.log(
+            `Now attempting to transfer clan leadership to inactive member ${inactiveMember}`
+          );
+          // If clan leadership transfer was successful
+          switchedLeadership = await this.getClient().transferClanLeadership(inactiveMember);
+
+          console.log(`Clan leadership transfer was ${switchedLeadership ? "" : "un"}successfully`);
+        } else {
+          console.log(`Failed to find an inactive clan member in our current clan.`);
+        }
       } else {
-        await this.getClient().sendPrivateMessage(
-          message.who,
-          `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
-        );
+        console.log(`We do not appear to have leadership of the clan ${targetClan.name}.`);
       }
 
-      return;
+      // If clan leadership transfer was successful
+      if (switchedLeadership) {
+        await this.getClient().joinClan(targetClan);
+      }
+
+      // If no clan leadership transfer was attempted, or we are not in the target clan
+      if (!switchedLeadership || (await this.getClient().myClan()) !== targetClan.id) {
+        console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
+
+        if (message.apiRequest) {
+          await sendApiResponse(message, "Error", "unsuccessful_whitelist");
+        } else {
+          await this.getClient().sendPrivateMessage(
+            message.who,
+            `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
+          );
+        }
+
+        return;
+      }
     }
 
     if (!/Old Sewers/.test(await this.getClient().visitUrl("clan_hobopolis.php"))) {
