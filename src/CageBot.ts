@@ -14,7 +14,6 @@ import {
   toJson,
   createApiResponse,
 } from "./utils/Utils";
-import { settings } from "cluster";
 import { readFileSync } from "fs";
 
 const mutex = new Mutex();
