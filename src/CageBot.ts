@@ -98,13 +98,11 @@ export class CageBot {
 
   start(): void {
     console.log("Starting Cagebot...");
-    console.log("We're trying to maintain " + this._settings.maintainAdventures + " adventures");
+    console.log(`We're trying to maintain ${this._settings.maintainAdventures} adventures`);
 
     if (this._settings.openEverything) {
       console.log(
-        "While adventures are above " +
-          this._settings.openEverythingWhileAdventuresAbove +
-          ", we're escaping the cage to open grates and twist valves."
+        `While adventures are above ${this._settings.openEverythingWhileAdventuresAbove}, we're escaping the cage to open grates and twist valves.`
       );
     }
 
@@ -112,7 +110,7 @@ export class CageBot {
       this.doInitialSetup().then(async () => {
         const secondsToRollover = await this._client.getSecondsToRollover();
 
-        console.log("The next rollover is in " + humanReadableTime(secondsToRollover));
+        console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
         console.log("Initial setup complete. Polling messages.");
 
         setInterval(async () => {

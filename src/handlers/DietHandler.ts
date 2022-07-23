@@ -180,7 +180,7 @@ export class DietHandler {
             await sendApiResponse(
               message,
               "Issue",
-              ("lack_edibles:" + itemIdsMissing.join(",")) as any
+              `lack_edibles:${itemIdsMissing.join(",")}` as any
             );
           } else {
             await this.getClient().sendPrivateMessage(

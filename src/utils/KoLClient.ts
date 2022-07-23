@@ -212,7 +212,7 @@ export class KoLClient {
         }
 
         this._credentials.sessionCookies = Object.entries(cookies)
-          .map(([key, value]) => key + "=" + value)
+          .map(([key, value]) => `${key}=${value}`)
           .join("; ");
       }
 
@@ -329,7 +329,7 @@ export class KoLClient {
                 await this.sendPrivateMessage(msg.who, message);
               } else {
                 for (let msg of splitMessage(message)) {
-                  await this.useChatMacro("/w Hobopolis " + msg);
+                  await this.useChatMacro(`/w Hobopolis ${msg}`);
                 }
               }
             },
@@ -564,7 +564,7 @@ export class KoLClient {
 
     // Pad with zeros
     while (itemId.length < 9) {
-      itemId = "0" + itemId;
+      itemId = `0${itemId}`;
     }
 
     itemId = mallResult.itemId + itemId;
