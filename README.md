@@ -47,7 +47,7 @@ You will also want the `Settings.json` file, however you can override the settin
 
 You will require an autoattack with the name CAGEBOT (all caps) that at the minimum, reads runaway;repeat
 
-The CombatMacro.txt included in this project has a combat macro you're recommended to use, especially if you're going for the complicated setup.
+The CombatMacro.txt included in this project will be installed if CAGEBOT macro is missing, and if not set, CAGEBOT macro will automatically be enabled as default attack.
 
 If your account has means of running freely, feel free to add them too, but I take no responsibility for failures.
 If you need to tiebreak equipment, +noncombat rate is nice too.
