@@ -45,45 +45,53 @@ You will also want the `Settings.json` file, however you can override the settin
 
 ## AUTOATTACK MACRO
 
-You will require an autoattack with the name CAGEBOT (all caps) that at the minimum, reads runaway;repeat
+The script depends on an autoattack script with the name CAGEBOT (all caps) that at the minimum, reads runaway;repeat
 
-The CombatMacro.txt included in this project will be installed if CAGEBOT macro is missing, and if not set, CAGEBOT macro will automatically be enabled as default attack.
+The CombatMacro.txt included in this project will be installed if CAGEBOT macro is missing, and on startup the CAGEBOT macro will automatically be enabled as default attack.
 
 If your account has means of running freely, feel free to add them too, but I take no responsibility for failures.
-If you need to tiebreak equipment, +noncombat rate is nice too.
 
 ## INGAME SETUP COMPLICATED
 
 This takes longer to setup, but is more rewarding as the bot can become fully self sustaining.
-This is also the recommended setup if you set the bot to open all grates and valves.
+This is also the recommended/required setup if you set the bot to open all grates and valves as this will burn adventures and require a fair bit of +noncombat.
 
 The minimum here is to grab the familiar Lil' Barrel Mimic, regenerate at least 10 MP/fight, and to have the cleesh skill.
-This requires level 9 at minumum.
+This requires level 9 at minumum. This will take a few days to setup, please abide by multi rules.
 
-You then have the option to run -combat gear, this is optional but is great for opening grates and valves while trying to be caged.
-It is also extremely recommended, if you're enabling the option to open everything. You'll run into issues if you don't run some source of -combat.
+You should run +noncombat gear, this is "optional" but is great for opening grates and valves while trying to be caged.
+It is also extremely unadvised to ignore this step if you're enabling the option to open everything. You're trying to hit NC's often after all.
 
-For MP Regeneration, an easy source is nurse's hat for 10-15.
+For MP Regeneration, an easy source is nurse's hat for 10-15 MP & HP Regen.
 
 Combat %, three accessories are: Bram's Choker, Ring of Conflict, Red Shoe
+
 Weapon: Rusted-out Shooting' Iron
 
-The last piece of equipment isn't so easy, but you can pick up another -5% combat in the Haunted Ballroom NC for a total of -25%.
+The last source of noncombat isn't so easy, there are two choices at this point.
+
+Firstly, you can pick up another 5% noncombat in the Haunted Ballroom NC for a total of 25% noncombat. This requires adventuring in manor to progress the manor quest.
 https://kol.coldfront.net/thekolwiki/index.php/Strung-Up_Quartet
 
-If you don't want to do that, or want that extra -1% combat. Then the best solution here would be acquiring the shirt or pants from the outfit Xiblaxian Stealth Suit.
-This however, can be expensive to acquire.
+The second option, or if you want 26% noncombat would be to acquire the shirt or pants from the outfit Xiblaxian Stealth Suit.
 
-You will also optionally want to pick up a Tuxedo Shirt for more adventures from booze.
+This however, can/will be expensive to acquire and is generally ill advised.
 
-And finally, you want to get as much +adv as you can.
+You could also pick up a Tuxedo Shirt for more adventures from booze, you don't need to wear this.
+
+Finally, you want to get as much +adv as you can.
+
 A clockwork maid (Recommended to buy from a no-limit store), and perhaps a pagoda. Equipment wise, you have the offhand 'ancient calendar', and shirt 'Shoe Ad T-Shirt'
+
+The reason behind requiring Cleesh is to avoid progressing in sewers, but still win fights to gain consumables from the Lil' Barrel Mimic.
 
 ## INGAME SETUP SIMPLE
 
 To set up your multi, please have it idle with as much +adv rollover gear
 on as possible, and at least 1 hp regen/fight. Whatsian Ionic Pliers in
 the offhand are recommended as a cheap and plentiful option for this.
+
+If you need to tiebreak equipment, +noncombat rate is nice too.
 
 Manually stock bot with the items below for consumption.
 Bot must be at least the associated level to consume these items.
@@ -134,8 +142,6 @@ If a caging is requested through an .api request, then the unbaited by a third p
 ## Whiteboard
 
 If the bot has write access to the clan dungeon's whiteboard, then it will edit the whiteboard if it detects the whiteboard cage/uncage strings as defined in the cagebot's config.
-
-Be aware however that if you modify the default whiteboard messages of the bot, you will need to account for html entity encoding, which would need a third party library introduced.
 
 So editing the clan's whiteboard to contain the uncaged message, will have the cagebot edit the whiteboard when a caging is requested to note that it's been caged. And edit again to the uncaged message when it fails to be caged, or is released.
 

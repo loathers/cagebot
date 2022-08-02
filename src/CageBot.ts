@@ -4,7 +4,14 @@ import { CagingHandler } from "./handlers/CagingHandler";
 import { UncageHandler } from "./handlers/UncageHandler";
 import { BusyResponse, StatusResponse } from "./utils/JsonResponses";
 import { KoLClient } from "./utils/KoLClient";
-import { ChatMessage, CageTask, Settings } from "./utils/Typings";
+import {
+  ChatMessage,
+  CageTask,
+  Settings,
+  KoLUser,
+  KoLClan,
+  LastClanRequest as CageCooldown,
+} from "./utils/Typings";
 import {
   humanReadableTime,
   updateWhiteboard,
@@ -28,6 +35,7 @@ export class CageBot {
   private _diet: DietHandler;
   private _cageHandler: CagingHandler;
   private _uncageHandler: UncageHandler;
+  private _recentCages: CageCooldown[] = [];
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -36,6 +44,28 @@ export class CageBot {
     this._diet = new DietHandler(this);
     this._cageHandler = new CagingHandler(this);
     this._uncageHandler = new UncageHandler(this);
+  }
+
+  addClanCooldown(user: KoLUser, clan: KoLClan) {
+    this._recentCages.push({
+      user: user,
+      clan: clan,
+      date: Date.now(),
+      expiresAfter: (this._settings.delayBetweenClanRepeats || 3600) * 1000,
+    });
+  }
+
+  getClanCooldown(clan: KoLClan): CageCooldown | undefined {
+    // While array has entries, and while entry has expired.
+    while (
+      this._recentCages.length > 0 &&
+      this._recentCages[0].date + this._recentCages[0].expiresAfter < Date.now()
+    ) {
+      // Remove the first element
+      this._recentCages.shift();
+    }
+
+    return this._recentCages.find((c) => c.clan.id === clan.id);
   }
 
   getClient(): KoLClient {
@@ -442,9 +472,15 @@ export class CageBot {
         );
       }
     } else {
-      await message.reply(
-        `I am not presently caged and have ${status.adventures} adventures left.`
-      );
+      if (this._cageTask) {
+        await message.reply(
+          `I am currently processing a cage request and have ${status.adventures} adventures left.`
+        );
+      } else {
+        await message.reply(
+          `I am not presently caged and have ${status.adventures} adventures left.`
+        );
+      }
     }
     //always send info on how full the bot is.
     //todo: assumes max valves. Should check for actual

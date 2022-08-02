@@ -98,9 +98,9 @@ export class CagingHandler {
       } else {
         await this.getClient().sendPrivateMessage(
           message.who,
-          `I'm in multiple clans named ${clanName}: ${whitelists.join(
-            ", "
-          )}. Please be more specific.`
+          `I'm in multiple clans named ${clanName}: ${whitelists
+            .map((c) => c.name)
+            .join(", ")}. Please be more specific.`
         );
       }
 
@@ -124,9 +124,30 @@ export class CagingHandler {
 
     const targetClan = whitelists[0];
 
-    console.log(
-      `Clan name "${clanName}" matched to whitelisted clan "${targetClan.name}". Attempting to whitelist.`
-    );
+    console.log(`Clan name "${clanName}" matched to whitelisted clan "${targetClan.name}".`);
+
+    const lastCooldown = this._cagebot.getClanCooldown(targetClan);
+
+    if (lastCooldown != undefined) {
+      const timeToWait = Math.round(
+        (lastCooldown.date + lastCooldown.expiresAfter - Date.now()) / 1000
+      );
+      const time = humanReadableTime(timeToWait);
+
+      console.log(
+        `Cage cooldown is in effect for ${targetClan.name}, aborting cage request. Cooldown expires in ${time}`
+      );
+
+      if (message.apiRequest) {
+        await sendApiResponse(message, "Error", ("clan_cage_cooldown:" + time) as any);
+      } else {
+        message.reply(
+          `I have been caged in ${targetClan.name} recently, a cooldown of ${time} is in effect.`
+        );
+      }
+
+      return;
+    }
 
     if (!(await this.attemptClanSwitch(targetClan))) {
       console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
@@ -141,6 +162,8 @@ export class CagingHandler {
       }
 
       return;
+    } else {
+      console.log(`Successfully whitelisted to clan ${targetClan.name}`);
     }
 
     if (!/Old Sewers/.test(await this.getClient().visitUrl("clan_hobopolis.php"))) {
@@ -282,6 +305,7 @@ export class CagingHandler {
 
     console.log(`Beginning turns in ${targetClan.name} sewers.`);
     let caged = this._cagebot.isCaged();
+    let hitUnknown = 0;
 
     while (
       !caged &&
@@ -389,6 +413,16 @@ export class CagingHandler {
           whichchoice: 296,
           option: 1,
         });
+      } else if (/You shouldn't be here./.test(adventureResponse)) {
+        console.log(`Looks like Hodgeman has been defeated!`);
+        break;
+      } else if (
+        /You've already found your way through these sewers, and you don't feel like spending any more time down there than you absolutely have to./.test(
+          adventureResponse
+        )
+      ) {
+        console.log(`Looks like we've finished the sewers..`);
+        break;
       }
 
       if (!caged && /whichchoice/.test(await this.getClient().visitUrl("place.php"))) {
@@ -407,6 +441,8 @@ export class CagingHandler {
         autoRelease:
           this._cagebot.getCageTask() && this._cagebot.getCageTask()?.autoRelease ? true : false,
       });
+
+      this._cagebot.addClanCooldown(message.who, targetClan);
 
       console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
 

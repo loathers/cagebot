@@ -33,6 +33,14 @@ export type Settings = {
   whiteboardMessageCaged?: string;
   whiteboardMessageUncaged?: string;
   whiteboardMessageAutoEscape?: string;
+  delayBetweenClanRepeats?: number;
+};
+
+export type LastClanRequest = {
+  user: KoLUser;
+  clan: KoLClan;
+  date: number;
+  expiresAfter: number;
 };
 
 export type KOLCredentials = {

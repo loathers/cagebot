@@ -4,5 +4,6 @@
   "openEverythingWhileAdventuresAbove": "100",
   "whiteboardMessageCaged": "${name} (#${id}) is CAGED in Hobopolis",
   "whiteboardMessageUncaged": "Hobopolis is UNCAGED",
-  "whiteboardMessageAutoEscape": "Cagebot will automatically escape: true"
+  "whiteboardMessageAutoEscape": "Cagebot will automatically escape: true",
+  "delayBetweenClanRepeats": 3600
 }

@@ -70,6 +70,7 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   settings.openEverythingWhileAdventuresAbove = parseInt(
     settings.openEverythingWhileAdventuresAbove || "80"
   );
+  settings.delayBetweenClanRepeats = parseInt(settings.delayBetweenClanRepeats || "3600");
 
   const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, settings as Settings);
   cageBot.start();

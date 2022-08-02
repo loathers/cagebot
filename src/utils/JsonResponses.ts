@@ -13,7 +13,8 @@ export type RequestStatusDetails =
   | "lack_barrel_edibles"
   | "lack_edibles:<Item Ids>"
   | "your_clan_unbaited"
-  | "remember_to_unbait";
+  | "remember_to_unbait"
+  | "clan_cage_cooldown:hh:MM:ss";
 
 export type BusyResponse = {
   elapsed?: number; // Seconds in current task, absent if we don't know
