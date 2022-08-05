@@ -56,6 +56,9 @@ If your account has means of running freely, feel free to add them too, but I ta
 This takes longer to setup, but is more rewarding as the bot can become fully self sustaining.
 This is also the recommended/required setup if you set the bot to open all grates and valves as this will burn adventures and require a fair bit of +noncombat.
 
+For the class and moon sign, the ideal two classes are likely to be Seal Clubber for dual wielding `Rusted-out shootin' iron`, or Disco Bandit for the -combat skill.
+Moon Sign doesn't matter much, but you could go with Blender for +5 adventures from booze, and the easy to pick up Torso Awareness skill.
+
 The minimum here is to grab the familiar Lil' Barrel Mimic, regenerate at least 10 MP/fight, and to have the cleesh skill.
 This requires level 9 at minumum. This will take a few days to setup, please abide by multi rules.
 
