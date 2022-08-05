@@ -143,8 +143,21 @@ export class CageBot {
         console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
         console.log("Initial setup complete. Polling messages.");
 
+        let handlingRollover = this._client.isRollover();
+
         setInterval(async () => {
           this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+
+          // If the last whisper check was during rollover, and it's no longer rollover
+          if (handlingRollover && !this._client.isRollover()) {
+            await this.testForThirdPartyUncaging();
+
+            if (!this.isCaged()) {
+              await this._diet.maintainAdventures();
+            }
+          }
+
+          handlingRollover = this._client.isRollover();
         }, 3000);
         this.processMessage();
       })
@@ -236,7 +249,7 @@ export class CageBot {
 
     await this.getDietHandler().doSetup();
 
-    if (!this._amCaged) {
+    if (!this.isCaged()) {
       await this._diet.maintainAdventures();
     }
   }

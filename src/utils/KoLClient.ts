@@ -294,6 +294,10 @@ export class KoLClient {
     };
   }
 
+  isRollover(): boolean {
+    return this._isRollover;
+  }
+
   async fetchNewWhispers(): Promise<ChatMessage[]> {
     if (this._isRollover || !(await this.logIn())) {
       return [];

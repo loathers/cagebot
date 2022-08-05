@@ -259,6 +259,7 @@ export class CagingHandler {
     let totalTurnsSpent: number = 0;
     let failedToMaintain = false;
     let triedToRescue: boolean = false;
+    let errorReason: string | null = null;
     await updateWhiteboard(this._cagebot, true);
 
     if (this.getSettings().openEverything) {
@@ -305,18 +306,43 @@ export class CagingHandler {
 
     console.log(`Beginning turns in ${targetClan.name} sewers.`);
     let caged = this._cagebot.isCaged();
-    let hitUnknown = 0;
+    let lastAdventuresCheck = 0;
+    let lastAdventuresCount = status.turnsPlayed;
+    const burningAdventures: () => Promise<boolean> = async () => {
+      lastAdventuresCheck = 0;
+      status = await this.getClient().getStatus();
+
+      // If we thought we had burned adventures, but we had more adventures than expected.
+      if (lastAdventuresCount == status.turnsPlayed && estimatedTurnsSpent > 3) {
+        errorReason = `Expected to have burned through adventures, but none were consumed.`;
+        return false;
+      }
+
+      lastAdventuresCount = status.turnsPlayed;
+
+      return true;
+    };
 
     while (
       !caged &&
       currentAdventures - estimatedTurnsSpent > 11 &&
       currentDrunk <= (this._cagebot.getDietHandler().getMaxDrunk() || 14)
     ) {
+      if (lastAdventuresCheck > 30 && estimatedTurnsSpent > 0) {
+        if (!(await burningAdventures())) {
+          break;
+        }
+      }
+
       // If we haven't failed to maintain our adventures yet
       if (!failedToMaintain) {
         // If we're at or lower than the amount of adventures we wish to maintain.
         if (currentAdventures - estimatedTurnsSpent <= this.getSettings().maintainAdventures) {
-          status = await this.getClient().getStatus();
+          // If we hadn't been burning adventures
+          if (!(await burningAdventures())) {
+            break;
+          }
+
           let adventuresPreDiet = status.adventures;
 
           // Add total turns spent as far
@@ -415,13 +441,14 @@ export class CagingHandler {
         });
       } else if (/You shouldn't be here./.test(adventureResponse)) {
         console.log(`Looks like Hodgeman has been defeated!`);
+        errorReason = `Hodgeman has been defeated and sewers are unavailable.`;
         break;
       } else if (
         /You've already found your way through these sewers, and you don't feel like spending any more time down there than you absolutely have to./.test(
           adventureResponse
         )
       ) {
-        console.log(`Looks like we've finished the sewers..`);
+        errorReason = `Passed through sewers and can no longer adventure there.`;
         break;
       }
 
@@ -474,6 +501,18 @@ export class CagingHandler {
           await this.getClient().sendPrivateMessage(
             message.who,
             `I ran out of adventures trying to get caged in ${targetClan.name}.`
+          );
+        }
+      } else if (errorReason) {
+        console.log(
+          `Experienced an error while trying to be caged in clan ${targetClan.name}. ${errorReason}`
+        );
+
+        // API doesn't send a message here, but sends it later
+        if (!message.apiRequest) {
+          await this.getClient().sendPrivateMessage(
+            message.who,
+            `Failed to be caged in ${targetClan.name}, ${errorReason}`
           );
         }
       } else {
