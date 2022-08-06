@@ -29,8 +29,6 @@ export type Diet = {
 
 export type Settings = {
   maintainAdventures: number;
-  openEverything: boolean;
-  openEverythingWhileAdventuresAbove: number;
   whiteboardMessageCaged?: string;
   whiteboardMessageUncaged?: string;
   whiteboardMessageAutoEscape?: string;

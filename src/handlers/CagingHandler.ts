@@ -249,10 +249,9 @@ export class CagingHandler {
     let gratesOpened = 0;
     let valvesTwisted = 0;
     let timesChewedOut = 0;
-    const [gratesFoundOpen, valvesFoundTwisted]: [number, number] = this.getSettings()
-      .openEverything
-      ? await readGratesAndValves(this.getClient())
-      : [0, 0];
+    const [gratesFoundOpen, valvesFoundTwisted]: [number, number] = await readGratesAndValves(
+      this.getClient()
+    );
     let currentAdventures = status.adventures;
     let currentDrunk: number = status.drunk;
     let estimatedTurnsSpent: number = 0;
@@ -262,38 +261,9 @@ export class CagingHandler {
     let errorReason: string | null = null;
     await updateWhiteboard(this._cagebot, true);
 
-    if (this.getSettings().openEverything) {
-      console.log(
-        `${targetClan.name} has ${gratesFoundOpen} grates already opened, ${valvesFoundTwisted} valves already twisted`
-      );
-    }
-
-    const escapeCageToOpenGratesAndValves: () => boolean = () => {
-      if (!this.getSettings().openEverything) {
-        return false;
-      }
-
-      // If we have less than this turns, lets not burn the adventures
-      if (
-        currentAdventures - estimatedTurnsSpent <=
-        this.getSettings().openEverythingWhileAdventuresAbove
-      ) {
-        if (gratesOpened + gratesFoundOpen < 20) {
-          console.log("We don't have enough adventures, so we're not escaping the cage.");
-        }
-
-        return false;
-      }
-
-      if (gratesOpened + gratesFoundOpen >= 20 && valvesTwisted + valvesFoundTwisted < 20) {
-        // Only if we have a large surplus of adventures, do we burn turns on valves when grates are done.
-        if (currentAdventures - estimatedTurnsSpent > 160) {
-          return true;
-        }
-      }
-
-      return gratesOpened + gratesFoundOpen < 20;
-    };
+    console.log(
+      `${targetClan.name} has ${gratesFoundOpen} grates already opened, ${valvesFoundTwisted} valves already twisted`
+    );
 
     if (message.apiRequest) {
       await sendApiResponse(message, "Accepted", "doing_cage");
@@ -386,15 +356,7 @@ export class CagingHandler {
           option: 2,
         });
 
-        if (escapeCageToOpenGratesAndValves()) {
-          console.log(`Escaping cage to continue opening grates and twisting valves!`);
-          await this._cagebot.chewOut(true);
-          estimatedTurnsSpent += 10;
-          timesChewedOut++;
-          caged = false;
-        } else {
-          console.log(`Caged!`);
-        }
+        console.log(`Caged!`);
       } else if (/Disgustin\' Junction/.test(adventureResponse)) {
         const choiceResponse = await this.getClient().visitUrl("choice.php", {
           whichchoice: 198,
