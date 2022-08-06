@@ -63,7 +63,7 @@ export class KoLClient {
       return [];
     }
 
-    const matches = response.matchAll(/"desc_skill\.php\?whichskill=(\d+)&self=true"/);
+    const matches = response.matchAll(/"desc_skill\.php\?whichskill=(\d+)&self=true"/g);
     const skills: number[] = [];
 
     for (const [, skillId] of matches) {
@@ -334,10 +334,10 @@ export class KoLClient {
       meat: parseInt(apiResponse["meat"]) || 0,
       drunk: parseInt(apiResponse["drunk"]) || 0,
       full: parseInt(apiResponse["full"]) || 0,
-      hp: parseInt(apiResponse("hp")) || 0,
-      mp: parseInt(apiResponse("mp")) || 0,
-      maxHP: parseInt(apiResponse("maxhp")) || 0,
-      maxMP: parseInt(apiResponse("maxmp")) || 0,
+      hp: parseInt(apiResponse["hp"]) || 0,
+      mp: parseInt(apiResponse["mp"]) || 0,
+      maxHP: parseInt(apiResponse["maxhp"]) || 0,
+      maxMP: parseInt(apiResponse["maxmp"]) || 0,
       familiar: apiResponse["familiar"] ? parseInt(apiResponse["familiar"]) : undefined,
       equipment: equipment,
       rollover: parseInt(apiResponse["rollover"]),
