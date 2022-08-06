@@ -15,6 +15,7 @@ export type SavedSettings = {
   validAtTurn: number;
   maxDrunk: number;
   cageTask?: CageTask;
+  knownSkills: number[];
 };
 
 export type Diet = {
@@ -106,8 +107,26 @@ export type KoLStatus = {
   full: number;
   drunk: number;
   rollover: number;
+  hp: number;
+  mp: number;
+  maxHP: number;
+  maxMP: number;
   equipment: Map<EquipSlot, number>;
   familiar?: number;
   meat: number;
   level: number;
+  effects: KoLEffect[];
+};
+
+export type KoLEffect = {
+  name: string;
+  duration: number;
+  id: number;
+};
+
+export type KoLSkill = {
+  name: string;
+  skillId: number;
+  effectId: number;
+  mpCost: number;
 };

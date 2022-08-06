@@ -1,7 +1,7 @@
 import { CageBot } from "../CageBot";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { CageTask, Diet, ChatMessage, SavedSettings, ClanWhiteboard } from "./Typings";
+import { CageTask, Diet, ChatMessage, SavedSettings, ClanWhiteboard, KoLSkill } from "./Typings";
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
@@ -67,13 +67,19 @@ export async function sendApiResponse(
   message.reply(createApiResponse(status, details));
 }
 
-export function saveSettings(turnsPlayed: number, maxDrunk: number, task?: CageTask) {
+export function saveSettings(
+  turnsPlayed: number,
+  maxDrunk: number,
+  knownSkills: KoLSkill[],
+  task?: CageTask
+) {
   writeFileSync(
     savedFileName,
     JSON.stringify({
       validAtTurn: turnsPlayed,
       maxDrunk: maxDrunk,
       cageTask: task,
+      knownSkills: knownSkills.map((skill) => skill.skillId),
     } as SavedSettings),
     "utf-8"
   );
@@ -92,6 +98,7 @@ export function loadSettings(): SavedSettings | undefined {
     const settings: SavedSettings = {
       validAtTurn: parseInt(json["validAtTurn"]),
       maxDrunk: parseInt(json["maxDrunk"]),
+      knownSkills: ((json["knownSkills"] ?? []) as string[]).map((s) => parseInt(s)),
     };
 
     if (json["cageTask"]) {
@@ -379,4 +386,12 @@ export function getLilBarrelDiet(): Diet[] {
   }
 
   return diet;
+}
+
+export function getMinusCombatSkills(): KoLSkill[] {
+  return [
+    { name: "Smooth Movement", mpCost: 10, skillId: 5017, effectId: 165 },
+    { name: "Musk of the Moose", mpCost: 10, skillId: 1019, effectId: 166 },
+    { name: "The Sonata of Sneakiness", mpCost: 20, skillId: 6015, effectId: 162 },
+  ];
 }

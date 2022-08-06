@@ -33,7 +33,8 @@ export class DietHandler {
 
   async doSetup() {
     if (!this._cagebot.isCaged() && !this._maxDrunk) {
-      if (/>Liver of Steel<\/a>/.test(await this.getClient().visitUrl("charsheet.php"))) {
+      // Liver of steel is Skill ID #1
+      if ((await this.getClient().getSkills()).includes(1)) {
         this._maxDrunk = 19;
       } else {
         this._maxDrunk = 14;

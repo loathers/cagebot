@@ -11,6 +11,7 @@ import {
   KoLUser,
   KoLClan,
   LastClanRequest as CageCooldown,
+  KoLSkill,
 } from "./utils/Typings";
 import {
   humanReadableTime,
@@ -20,6 +21,7 @@ import {
   loadSettings,
   toJson,
   createApiResponse,
+  getMinusCombatSkills,
 } from "./utils/Utils";
 import { readFileSync } from "fs";
 
@@ -36,6 +38,7 @@ export class CageBot {
   private _cageHandler: CagingHandler;
   private _uncageHandler: UncageHandler;
   private _recentCages: CageCooldown[] = [];
+  private _knownSkills: KoLSkill[] = [];
 
   constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
@@ -96,7 +99,12 @@ export class CageBot {
 
     const status = await this.getClient().getStatus();
 
-    saveSettings(status.turnsPlayed, this.getDietHandler().getMaxDrunk() || 14, this.getCageTask());
+    saveSettings(
+      status.turnsPlayed,
+      this.getDietHandler().getMaxDrunk() || 14,
+      this._knownSkills,
+      this.getCageTask()
+    );
   }
 
   async loadSettings() {
@@ -122,6 +130,9 @@ export class CageBot {
 
     this.getDietHandler().setMaxDrunk(settings.maxDrunk);
     this._cageTask = settings.cageTask;
+    this._knownSkills = getMinusCombatSkills().filter((skill) =>
+      settings.knownSkills.includes(skill.skillId)
+    );
 
     console.log("Loaded previous state from saved file");
   }
@@ -252,6 +263,11 @@ export class CageBot {
     await this.getDietHandler().doSetup();
 
     if (!this.isCaged()) {
+      const knownSkills = await this._client.getSkills();
+      this._knownSkills = getMinusCombatSkills().filter((skill) =>
+        knownSkills.includes(skill.skillId)
+      );
+
       await this._diet.maintainAdventures();
     }
   }

@@ -13,6 +13,7 @@ import {
   MallResult,
   ClanWhiteboard,
   CombatMacro,
+  KoLEffect,
 } from "./Typings";
 import { RequestResponse } from "./JsonResponses";
 import { decode } from "html-entities";
@@ -53,6 +54,23 @@ export class KoLClient {
 
   getUserID() {
     return this._player?.id;
+  }
+
+  async getSkills(): Promise<number[]> {
+    const response = (await this.visitUrl("charsheet.php")) as string;
+
+    if (!response) {
+      return [];
+    }
+
+    const matches = response.matchAll(/"desc_skill\.php\?whichskill=(\d+)&self=true"/);
+    const skills: number[] = [];
+
+    for (const [, skillId] of matches) {
+      skills.push(parseInt(skillId));
+    }
+
+    return skills;
   }
 
   async getSecondsToRollover(): Promise<number> {
@@ -255,6 +273,12 @@ export class KoLClient {
     );
   }
 
+  async castSkill(skill: number, amount: number = 1) {
+    await this.visitUrl(
+      `runskillz.php?action=Skillz&whichskill=${skill}&targetplayer=${this._player?.id}&pwd=${this._credentials?.pwdhash}&quantity=${amount}&ajax=1`
+    );
+  }
+
   async getStatus(): Promise<KoLStatus> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "status",
@@ -268,17 +292,40 @@ export class KoLClient {
         meat: 0,
         drunk: 19,
         full: 14,
+        hp: 1,
+        mp: 1,
+        maxHP: 1,
+        maxMP: 1,
         equipment: new Map(),
         rollover: Date.now(),
         turnsPlayed: 0,
+        effects: [],
       };
     }
 
     const equipment = new Map();
     const equips = apiResponse["equipment"];
+    const effects: KoLEffect[] = [];
 
     for (let key of Object.keys(equips)) {
       equipment.set(key, parseInt(equips[key]));
+    }
+
+    if (apiResponse["effects"]) {
+      for (const apiEffect of Object.values(apiResponse["effects"]) as string[][]) {
+        // description-UUID [Name, Duration, Shorthand ID, source, Effect ID]
+        const effect: KoLEffect = {
+          name: apiEffect[0],
+          duration: parseInt(apiEffect[1]),
+          id: parseInt(apiEffect[4]),
+        };
+
+        if (effect.duration <= 0) {
+          continue;
+        }
+
+        effects.push(effect);
+      }
     }
 
     return {
@@ -287,10 +334,15 @@ export class KoLClient {
       meat: parseInt(apiResponse["meat"]) || 0,
       drunk: parseInt(apiResponse["drunk"]) || 0,
       full: parseInt(apiResponse["full"]) || 0,
+      hp: parseInt(apiResponse("hp")) || 0,
+      mp: parseInt(apiResponse("mp")) || 0,
+      maxHP: parseInt(apiResponse("maxhp")) || 0,
+      maxMP: parseInt(apiResponse("maxmp")) || 0,
       familiar: apiResponse["familiar"] ? parseInt(apiResponse["familiar"]) : undefined,
       equipment: equipment,
       rollover: parseInt(apiResponse["rollover"]),
       turnsPlayed: parseInt(apiResponse["turnsplayed"]) || 0,
+      effects: effects,
     };
   }
 

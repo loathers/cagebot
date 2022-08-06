@@ -1,7 +1,7 @@
 import { ExploredResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
 import { KoLClient } from "../utils/KoLClient";
-import { Settings, ChatMessage, KoLClan } from "../utils/Typings";
+import { Settings, ChatMessage, KoLClan, KoLSkill } from "../utils/Typings";
 import {
   sendApiResponse,
   humanReadableTime,
