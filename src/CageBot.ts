@@ -150,14 +150,16 @@ export class CageBot {
 
           // If the last whisper check was during rollover, and it's no longer rollover
           if (handlingRollover && !this._client.isRollover()) {
+            handlingRollover = false;
+
             await this.testForThirdPartyUncaging();
 
             if (!this.isCaged()) {
               await this._diet.maintainAdventures();
             }
+          } else {
+            handlingRollover = this._client.isRollover();
           }
-
-          handlingRollover = this._client.isRollover();
         }, 3000);
         this.processMessage();
       })
