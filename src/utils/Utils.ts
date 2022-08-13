@@ -1,7 +1,15 @@
 import { CageBot } from "../CageBot";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
 import { KoLClient } from "./KoLClient";
-import { CageTask, Diet, ChatMessage, SavedSettings, ClanWhiteboard, KoLSkill } from "./Typings";
+import {
+  CageTask,
+  Diet,
+  ChatMessage,
+  SavedSettings,
+  ClanWhiteboard,
+  KoLSkill,
+  BuffySkill,
+} from "./Typings";
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
@@ -393,5 +401,19 @@ export function getMinusCombatSkills(): KoLSkill[] {
     { name: "Smooth Movement", mpCost: 10, skillId: 5017, effectId: 165 },
     { name: "Musk of the Moose", mpCost: 10, skillId: 1019, effectId: 166 },
     { name: "The Sonata of Sneakiness", mpCost: 20, skillId: 6015, effectId: 162 },
+  ];
+}
+
+/**
+ * Skills we can request from buffy that are useful, ordered by usefulness.
+ * We skip ode to booze because it takes far more MP and we'd rather not abuse buffy too much. Perhaps if we clean up our consuming to wait for ode in the future..
+ * Though it makes cages slower?
+ *
+ * TODO: Need to somehow detect when we have too many songs
+ */
+export function getBuffySkills(): BuffySkill[] {
+  return [
+    { name: "The Sonata of Sneakiness", mpCost: 20, effectId: 162 },
+    { name: "Paul's Passionate Pop Song", mpCost: 20, effectId: 2375 },
   ];
 }

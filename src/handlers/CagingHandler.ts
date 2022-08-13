@@ -1,17 +1,20 @@
 import { ExploredResponse } from "../utils/JsonResponses";
 import { CageBot } from "../CageBot";
 import { KoLClient } from "../utils/KoLClient";
-import { Settings, ChatMessage, KoLClan, KoLSkill } from "../utils/Typings";
+import { Settings, ChatMessage, KoLClan, KoLSkill, KoLStatus, BuffySkill } from "../utils/Typings";
 import {
   sendApiResponse,
   humanReadableTime,
   readGratesAndValves,
   updateWhiteboard,
   toJson,
+  getBuffySkills,
+  getMinusCombatSkills,
 } from "../utils/Utils";
 
 export class CagingHandler {
   private _cagebot: CageBot;
+  private _lastBuffyRequest: number = 0;
 
   constructor(cagebot: CageBot) {
     this._cagebot = cagebot;
@@ -23,6 +26,60 @@ export class CagingHandler {
 
   getSettings(): Settings {
     return this._cagebot.getSettings();
+  }
+
+  async runBuffyRequest(status: KoLStatus) {
+    // We request from buffy only once every 24 hours, because buffy should always be sending us enough buffs for multiple days
+    if (this._lastBuffyRequest > Date.now()) {
+      return;
+    }
+
+    // The next buffy request is after 1 day
+    this._lastBuffyRequest = Date.now() + 24 * 60 * 60 * 1000;
+
+    // Find all effects that buffy can give us
+    const wantBuffy: BuffySkill[] = getBuffySkills().filter(
+      (s) => status.effects.find((e) => e.id === s.effectId && e.duration > 50) == null
+    );
+
+    for (const buffySkill of wantBuffy) {
+      console.log(`Requesting 500 turns of ${buffySkill.name} from Buffy`);
+      await this.getClient().useChatMacro("/w Buffy 500 " + buffySkill.name);
+    }
+  }
+
+  /**
+   * Returns a boolean indicating that skills are properly cast and all
+   *
+   * If true, then no skills needed to be maintained and we should skip this for the rest of the caging
+   * If false, then we should call this again in the future.
+   *
+   * @returns True if we should avoid calling again
+   */
+  async castAndMaintainEffects(status: KoLStatus): Promise<boolean> {
+    await this.runBuffyRequest(status);
+
+    // Given we care less about evenly distributing skills as it should naturally balance with time..
+    // Just find the first skill with not enough turns in the effect remaining.
+    const wantToCast: KoLSkill | undefined = this._cagebot
+      .getKnownSkills()
+      .find((s) => status.effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
+
+    // If there is no skills we need to cast, return true
+    if (!wantToCast) {
+      return true;
+    }
+
+    // Subtract 10 MP for cleesh
+    const mpRemains = status.mp - 10;
+    const timesToCast = Math.floor(mpRemains / wantToCast.mpCost);
+
+    if (timesToCast >= 1) {
+      console.log(`Casting ${wantToCast.name} x ${timesToCast}`);
+      await this.getClient().castSkill(wantToCast.skillId, timesToCast);
+    }
+
+    return false;
   }
 
   async becomeCaged(message: ChatMessage): Promise<void> {
@@ -245,6 +302,7 @@ export class CagingHandler {
 
     await this.getClient().useChatMacro("/listenon Hobopolis");
     let status = await this.getClient().getStatus();
+    let maintainEffects: boolean = await this.castAndMaintainEffects(status);
 
     let gratesOpened = 0;
     let valvesTwisted = 0;
@@ -278,7 +336,7 @@ export class CagingHandler {
     let caged = this._cagebot.isCaged();
     let lastAdventuresCheck = 0;
     let lastAdventuresCount = status.turnsPlayed;
-    const burningAdventures: () => Promise<boolean> = async () => {
+    const adventuringNormally: () => Promise<boolean> = async () => {
       lastAdventuresCheck = 0;
       status = await this.getClient().getStatus();
 
@@ -298,9 +356,11 @@ export class CagingHandler {
       currentAdventures - estimatedTurnsSpent > 11 &&
       currentDrunk <= (this._cagebot.getDietHandler().getMaxDrunk() || 14)
     ) {
-      if (lastAdventuresCheck > 30 && estimatedTurnsSpent > 0) {
-        if (!(await burningAdventures())) {
+      if (lastAdventuresCheck++ > (maintainEffects ? 6 : 30) && estimatedTurnsSpent > 0) {
+        if (!(await adventuringNormally())) {
           break;
+        } else if (maintainEffects) {
+          maintainEffects = await this.castAndMaintainEffects(status);
         }
       }
 
@@ -309,8 +369,10 @@ export class CagingHandler {
         // If we're at or lower than the amount of adventures we wish to maintain.
         if (currentAdventures - estimatedTurnsSpent <= this.getSettings().maintainAdventures) {
           // If we hadn't been burning adventures
-          if (!(await burningAdventures())) {
+          if (!(await adventuringNormally())) {
             break;
+          } else if (maintainEffects) {
+            maintainEffects = await this.castAndMaintainEffects(status);
           }
 
           let adventuresPreDiet = status.adventures;

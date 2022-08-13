@@ -128,3 +128,9 @@ export type KoLSkill = {
   effectId: number;
   mpCost: number;
 };
+
+export type BuffySkill = {
+  name: string;
+  effectId: number;
+  mpCost: number;
+};

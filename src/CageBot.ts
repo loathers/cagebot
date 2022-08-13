@@ -49,6 +49,10 @@ export class CageBot {
     this._uncageHandler = new UncageHandler(this);
   }
 
+  getKnownSkills() {
+    return this._knownSkills;
+  }
+
   addClanCooldown(user: KoLUser, clan: KoLClan) {
     this._recentCages.push({
       user: user,
@@ -140,13 +144,22 @@ export class CageBot {
   start(): void {
     console.log("Starting Cagebot...");
     console.log(`We're trying to maintain ${this._settings.maintainAdventures} adventures`);
-    // TODO Log known skills, current adventures
+    // TODO Current adventures
 
     this._client.logIn().then(() =>
       this.doInitialSetup().then(async () => {
         const secondsToRollover = await this._client.getSecondsToRollover();
 
         console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
+
+        if (this._knownSkills.length > 0) {
+          console.log(
+            `We know the skill${this._knownSkills.length != 1 ? "s" : ""}: ${this._knownSkills
+              .map((s) => `'${s.name}'`)
+              .join(", ")} and will attempt to maintain them.`
+          );
+        }
+
         console.log("Initial setup complete. Polling messages.");
 
         let handlingRollover = this._client.isRollover();
