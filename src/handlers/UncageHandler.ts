@@ -9,7 +9,7 @@ export class UncageHandler {
     this._cagebot = cagebot;
   }
 
-  async escapeCage(message: ChatMessage, apiRequest: boolean = false): Promise<void> {
+  async escapeCage(message: ChatMessage): Promise<void> {
     console.log(
       `${message.who.name} (#${message.who.id}) requested escape from cage${
         message.apiRequest ? " in json format" : ""
@@ -34,7 +34,7 @@ export class UncageHandler {
 
       console.log(`Successfully chewed out of cage. Reporting success.`);
 
-      if (apiRequest) {
+      if (message.apiRequest) {
         await this._cagebot.sendStatus(message);
       } else {
         await message.reply("Chewed out! I am now uncaged.");
