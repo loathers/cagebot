@@ -214,6 +214,14 @@ export class CageBot {
       return;
     }
 
+    // Ensure the "Area might be too tough for you" warning is disabled
+    await this._client.visitUrl("account.php", {
+      am: 1,
+      action: "flag_ignorezonewarnings",
+      value: 1,
+      ajax: 1,
+    });
+
     let macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
     const macroText = readFileSync("./data/CombatMacro.txt", "utf-8");
 
