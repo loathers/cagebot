@@ -452,10 +452,25 @@ export class CagingHandler {
         // Always set this to true so follow up encounters to this NC will result in a fight.
         triedToRescue = true;
 
-        await this.getClient().visitUrl("choice.php", {
+        const cagePage = await this.getClient().visitUrl("choice.php", {
           whichchoice: 199,
           option: option,
         });
+
+        if (
+          !/You stare at it for 4 minutes and 33 seconds before getting bored and climbing back out of the sewer/.test(
+            cagePage
+          )
+        ) {
+          console.log(
+            `Someone is already in the C.H.U.M. Cage! As we can't be caged, performing an early exit.`
+          );
+          errorReason = `Sewer cage is already occupied, cannot be caged.`;
+          // Set the delay incase this was intentional
+          this._cagebot.addClanCooldown(message.who, targetClan);
+
+          break;
+        }
       } else if (/Pop!/.test(adventureResponse)) {
         estimatedTurnsSpent--; // Free turn
 
