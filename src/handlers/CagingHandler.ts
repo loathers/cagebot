@@ -336,16 +336,21 @@ export class CagingHandler {
     let caged = this._cagebot.isCaged();
     let lastAdventuresCheck = 0;
     let lastAdventuresCount = status.turnsPlayed;
+
+    const turnsSpentSinceLastCheck: () => number = () => {
+      return totalTurnsSpent + estimatedTurnsSpent - lastAdventuresCheck;
+    };
+
     const adventuringNormally: () => Promise<boolean> = async () => {
-      lastAdventuresCheck = 0;
       status = await this.getClient().getStatus();
 
       // If we thought we had burned adventures, but we had more adventures than expected.
-      if (lastAdventuresCount == status.turnsPlayed && estimatedTurnsSpent > 3) {
+      if (lastAdventuresCount == status.turnsPlayed && turnsSpentSinceLastCheck() > 3) {
         errorReason = `Expected to have burned through adventures, but none were consumed.`;
         return false;
       }
 
+      lastAdventuresCheck = estimatedTurnsSpent + totalTurnsSpent;
       lastAdventuresCount = status.turnsPlayed;
 
       return true;
@@ -356,7 +361,7 @@ export class CagingHandler {
       currentAdventures - estimatedTurnsSpent > 11 &&
       currentDrunk <= (this._cagebot.getDietHandler().getMaxDrunk() || 14)
     ) {
-      if (lastAdventuresCheck++ > (maintainEffects ? 6 : 30) && estimatedTurnsSpent > 0) {
+      if (turnsSpentSinceLastCheck() > (maintainEffects ? 6 : 30)) {
         if (!(await adventuringNormally())) {
           break;
         } else if (maintainEffects) {
