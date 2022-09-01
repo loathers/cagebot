@@ -463,6 +463,7 @@ export class CagingHandler {
         });
 
         if (
+          option == 3 &&
           !/You stare at it for 4 minutes and 33 seconds before getting bored and climbing back out of the sewer/.test(
             cagePage
           )
