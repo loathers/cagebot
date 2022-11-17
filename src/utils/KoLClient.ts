@@ -285,7 +285,7 @@ export class KoLClient {
       for: "Cagesitter (Maintained by Phillammon)",
     });
 
-    if (!apiResponse) {
+    if (!apiResponse || !apiResponse["equipment"]) {
       return {
         level: 1,
         adventures: 10,
@@ -307,8 +307,10 @@ export class KoLClient {
     const equips = apiResponse["equipment"];
     const effects: KoLEffect[] = [];
 
-    for (let key of Object.keys(equips)) {
-      equipment.set(key, parseInt(equips[key]));
+    for (let [key, value] of Object.entries(equips)) {
+      if (typeof value != "string" || !/^\d+$/.test(key) || !/^\d+$/.test(value)) continue;
+
+      equipment.set(key, parseInt(value));
     }
 
     if (apiResponse["effects"]) {
@@ -456,14 +458,17 @@ export class KoLClient {
   async getWhitelists(): Promise<KoLClan[]> {
     const clanRecuiterResponse = await this.visitUrl("clan_signup.php");
     if (!clanRecuiterResponse) return [];
+
     const clanIds = select(
       '//select[@name="whichclan"]/option/@value',
       parser.parseFromString(clanRecuiterResponse, "text/xml")
     ).map((s) => (s.toString().match(/\d+/) ?? ["0"])[0]);
+
     const clanNames = select(
       '//select[@name="whichclan"]/option/text()',
       parser.parseFromString(clanRecuiterResponse, "text/xml")
     );
+
     return clanNames.map((element, index) => ({
       name: element.toString(),
       id: clanIds[index].toString(),
@@ -474,6 +479,7 @@ export class KoLClient {
     const myClanResponse = await this.visitUrl("showplayer.php", {
       who: this._player?.id ?? 0,
     });
+
     return ((myClanResponse as string).match(
       /\<b\>\<a class=nounder href=\"showclan\.php\?whichclan=(\d+)/
     ) ?? ["", ""])[1];
@@ -504,8 +510,10 @@ export class KoLClient {
       return map;
     }
 
-    for (let key of Object.keys(apiResponse)) {
-      map.set(parseInt(key), parseInt(apiResponse[key]));
+    for (let [key, value] of Object.entries(apiResponse)) {
+      if (typeof value != "string" || !/^\d+$/.test(key) || !/^\d+$/.test(value)) continue;
+
+      map.set(parseInt(key), parseInt(value));
     }
 
     return map;
