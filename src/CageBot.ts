@@ -186,6 +186,8 @@ export class CageBot {
   }
 
   async testForThirdPartyUncaging(): Promise<void> {
+    if (!(await this._client.loggedIn())) return;
+
     this._lastCheckForThirdPartyUncaging = Date.now();
     let page = await this._client.visitUrl("place.php");
 
