@@ -141,48 +141,62 @@ export class CageBot {
     console.log("Loaded previous state from saved file");
   }
 
-  start(): void {
+  start() {
     console.log("Starting Cagebot...");
     console.log(`We're trying to maintain ${this._settings.maintainAdventures} adventures`);
     // TODO Current adventures
 
-    this._client.logIn().then(() =>
-      this.doInitialSetup().then(async () => {
-        const secondsToRollover = await this._client.getSecondsToRollover();
+    const loginIfSuccessful = () => {
+      if (this._client.isRollover()) {
+        console.log("Rollover is in progress, delaying login for 60s");
+        setTimeout(loginIfSuccessful, 60_000);
+        return;
+      }
 
-        console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
+      this.performLoginTasks();
+    };
 
-        if (this._knownSkills.length > 0) {
-          console.log(
-            `We know the skill${this._knownSkills.length != 1 ? "s" : ""}: ${this._knownSkills
-              .map((s) => `'${s.name}'`)
-              .join(", ")} and will attempt to maintain them.`
-          );
-        }
+    this._client.logIn().then(() => {
+      loginIfSuccessful();
+    });
+  }
 
-        console.log("Initial setup complete. Polling messages.");
+  performLoginTasks() {
+    this.doInitialSetup().then(async () => {
+      const secondsToRollover = await this._client.getSecondsToRollover();
 
-        let handlingRollover = this._client.isRollover();
+      console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
 
-        setInterval(async () => {
-          this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+      if (this._knownSkills.length > 0) {
+        console.log(
+          `We know the skill${this._knownSkills.length != 1 ? "s" : ""}: ${this._knownSkills
+            .map((s) => `'${s.name}'`)
+            .join(", ")} and will attempt to maintain them.`
+        );
+      }
 
-          // If the last whisper check was during rollover, and it's no longer rollover
-          if (handlingRollover && !this._client.isRollover()) {
-            handlingRollover = false;
+      console.log("Initial setup complete. Polling messages.");
 
-            await this.testForThirdPartyUncaging();
+      let handlingRollover = this._client.isRollover();
 
-            if (!this.isCaged()) {
-              await this._diet.maintainAdventures();
-            }
-          } else {
-            handlingRollover = this._client.isRollover();
+      setInterval(async () => {
+        this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+
+        // If the last whisper check was during rollover, and it's no longer rollover
+        if (handlingRollover && !this._client.isRollover()) {
+          handlingRollover = false;
+
+          await this.testForThirdPartyUncaging();
+
+          if (!this.isCaged()) {
+            await this._diet.maintainAdventures();
           }
-        }, 3000);
-        this.processMessage();
-      })
-    );
+        } else {
+          handlingRollover = this._client.isRollover();
+        }
+      }, 3000);
+      this.processMessage();
+    });
   }
 
   async testForThirdPartyUncaging(): Promise<void> {
