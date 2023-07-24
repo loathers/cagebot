@@ -170,7 +170,8 @@ export class DietHandler {
           if (message.apiRequest) {
             await sendApiResponse(message, "Issue", "lack_barrel_edibles");
           } else {
-            await message.reply(`Please tell my operator that I am out of consumables.`);
+            // await message.reply(`Please tell my operator that I am out of consumables.`);
+            this.cryAboutDiet(message);
           }
         }
       } else {
@@ -219,6 +220,26 @@ export class DietHandler {
       }.`
     );
 
+    const dietStatus = await this.getDietStatus();
+
+    if (message.apiRequest) {
+      await this.getClient().sendPrivateMessage(message.who, toJson(dietStatus));
+    } else {
+      await message.reply(
+        `My remaining diet today has an expected outcome of ${dietStatus.possibleAdvsToday} adventures.`
+      );
+      await message.reply(
+        `I have enough food for ${dietStatus.food} fullness and ${dietStatus.fullnessAdvs} adventures.`
+      );
+      await message.reply(
+        `I have enough drinks for another ${dietStatus.drink} inebriety and ${dietStatus.drunknessAdvs} adventures.`
+      );
+
+      await this.cryAboutDiet(message);
+    }
+  }
+
+  async getDietStatus(): Promise<DietResponse> {
     const inventory: Map<number, number> = await this.getClient().getInventory();
     const status = await this.getClient().getStatus();
     const level = status.level;
@@ -244,23 +265,49 @@ export class DietHandler {
       }
     }
 
-    if (message.apiRequest) {
-      const dietStatus: DietResponse = {
-        type: "diet",
-        possibleAdvsToday: advs,
-        food: food,
-        fullnessAdvs: fullAdvs,
-        drink: drink,
-        drunknessAdvs: drunkAdvs,
-      };
+    for (let diet of this._diet || []) {
+      if (!inventory.has(diet.id) || diet.level > level) {
+        continue;
+      }
 
-      await this.getClient().sendPrivateMessage(message.who, toJson(dietStatus));
-    } else {
-      await message.reply(`My remaining diet today has an expected outcome of ${advs} adventures.`);
-      await message.reply(`I have enough food for ${food} fullness and ${fullAdvs} adventures.`);
-      await message.reply(
-        `I have enough drinks for another ${drink} inebriety and ${drunkAdvs} adventures.`
-      );
+      let count = inventory.get(diet.id) || 0;
+
+      if (diet.type == "food") {
+        food += count * diet.fullness;
+        fullAdvs += count * diet.estAdvs;
+      } else {
+        drink += count * diet.fullness;
+        drunkAdvs += count * diet.estAdvs;
+      }
+    }
+
+    const dietStatus: DietResponse = {
+      type: "diet",
+      possibleAdvsToday: advs,
+      food: food,
+      fullnessAdvs: fullAdvs,
+      drink: drink,
+      drunknessAdvs: drunkAdvs,
+    };
+
+    return dietStatus;
+  }
+
+  async cryAboutDiet(message?: ChatMessage) {
+    if (!message || !this._diet || message.apiRequest) return;
+
+    const status = await this.getDietStatus();
+
+    for (const type of ["food", "drink"]) {
+      if ((type == "food" ? status.fullnessAdvs : status.drunknessAdvs) >= 1000) continue;
+
+      const diet = this._diet.filter((d) => d.type == type).map((d) => d.name);
+
+      message
+        .reply(`I am running low on ${type}, are you able to send me some of the following?`)
+        .then(() => {
+          message.reply(diet.join(", "));
+        });
     }
   }
 
