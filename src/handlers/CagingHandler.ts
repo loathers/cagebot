@@ -317,7 +317,6 @@ export class CagingHandler {
     let failedToMaintain = false;
     let triedToRescue: boolean = false;
     let errorReason: string | null = null;
-
     await updateWhiteboard(this._cagebot, true);
 
     console.log(
