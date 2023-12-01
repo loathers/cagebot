@@ -1,0 +1,12 @@
+# CLEESH all non-CLEESH monsters if we can.
+if !mpbelow 10 && hasskill CLEESH && (!monstername Frog && !monstername Newt && !monstername Salamander)
+  skill CLEESH
+endif
+
+# If this is a CLEESH monster, attack them.
+if monstername Frog || monstername Newt || monstername Salamander
+  attack; repeat;
+endif
+
+# If we reach this point, likely unable to cleesh. Runaway.
+runaway; repeat;
