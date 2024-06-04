@@ -3,6 +3,22 @@ import { readFileSync } from "fs";
 import { CageBot } from "./CageBot";
 import { Settings } from "./utils/Typings";
 
+const origlog = console.log;
+
+console.log = function (obj, ...placeholders) {
+  if (obj == null) obj = "";
+
+  if (typeof obj === "string") {
+    placeholders.unshift(new Date(Date.now()).toLocaleString() + "\t" + obj);
+  } else {
+    // This handles console.log( object )
+    placeholders.unshift(obj);
+    placeholders.unshift(new Date(Date.now()).toLocaleString() + "\t%j");
+  }
+
+  origlog.apply(this, placeholders);
+};
+
 dotenv.config();
 console.log("  _____                 _           _   ");
 console.log(" / ____|               | |         | |  ");

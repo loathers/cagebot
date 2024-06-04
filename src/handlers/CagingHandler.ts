@@ -317,7 +317,6 @@ export class CagingHandler {
     let failedToMaintain = false;
     let triedToRescue: boolean = false;
     let errorReason: string | null = null;
-
     await updateWhiteboard(this._cagebot, true);
 
     console.log(
@@ -474,7 +473,7 @@ export class CagingHandler {
           );
           errorReason = `Sewer cage is already occupied, cannot be caged.`;
           // Set the delay incase this was intentional
-          this._cagebot.addClanCooldown(message.who, targetClan);
+          //this._cagebot.addClanCooldown(message.who, targetClan);
 
           break;
         }
