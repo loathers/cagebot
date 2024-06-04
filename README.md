@@ -1,6 +1,6 @@
 ```
-  _____                 _           _   
- / ____|               | |         | |  
+  _____                 _           _
+ / ____|               | |         | |
 | |     __ _  __ _  ___| |__   ___ | |_
 | |    / _` |/ _` |/ _ \ '_ \ / _ \| __|
 | |___| (_| | (_| |  __/ |_) | (_) | |_
@@ -8,25 +8,28 @@
               __/ |
              |___/
 ```
-            
+
 Cagebot is an automatic hobopolis cagebaiting bot for Kingdom of Loathing
 operated wholly through ingame whispers.
 
 ## IMPORTANT NOTE
+
 **HEED THE NOTICE ON THE FOURTH WALL**. If you are operating Cagebot, do NOT, under any circumstances, enter any hobopolis instance to which it has a whitelist on any other account. Failure to heed this warning may result in your accounts being disabled. You have been warned.
 
 ## INSTALLATION
-In order to install cagebot, you will need node.js and npm installed. 
-These can be found [here](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm). 
+
+In order to install cagebot, you will need node.js and npm installed.
+These can be found [here](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm).
 Once you have those, navigate to the root directory of this project and
 execute the following:
 
 ```
-npm install
+npm ci
 npm run build
 ```
 
 ## OUT OF GAME SETUP
+
 In order to function, Cagebot requires exclusive access to a character
 that is at least level 3 and has passed the trial of literacy. To give
 Cagebot access to a character, put its username and password into the
@@ -38,17 +41,62 @@ package.json). This file should be in the form:
   KOL_PASS='Cagebot P4ssw0rD'
 ```
 
-## INGAME SETUP
+You will also want the `Settings.json` file, however you can override the settings in the .env file, such as `maintainAdventures='80'`
+
+## AUTOATTACK MACRO
+
+The script depends on an autoattack script with the name CAGEBOT (all caps) that at the minimum, reads runaway;repeat
+
+The CombatMacro.txt included in this project will be installed if CAGEBOT macro is missing, and on startup the CAGEBOT macro will automatically be enabled as default attack.
+
+If your account has means of running freely, feel free to add them too, but I take no responsibility for failures.
+
+## INGAME SETUP COMPLICATED
+
+This takes longer to setup, but is more rewarding as the bot can become fully self sustaining.
+This is also the recommended/required setup if you set the bot to open all grates and valves as this will burn adventures and require a fair bit of +noncombat.
+
+For the class and moon sign, the ideal two classes are likely to be Seal Clubber for dual wielding `Rusted-out shootin' iron`, and the skill `Musk of the Moose`.
+Moon Sign doesn't matter much, but you could go with Blender for +5 adventures from booze, and the easy to pick up Torso Awareness skill.
+
+The minimum here is to grab the familiar Lil' Barrel Mimic, regenerate at least 10 MP/fight, and to have the cleesh skill.
+This requires level 9 at minumum. This will take a few days to setup, please abide by multi rules.
+
+You should run +noncombat gear, this is "optional" but is great for opening grates and valves while trying to be caged.
+It is also extremely unadvised to ignore this step if you're enabling the option to open everything. You're trying to hit NC's often after all.
+
+For MP Regeneration, an easy source is nurse's hat for 10-15 MP & HP Regen.
+
+Combat %, three accessories are: Bram's Choker, Ring of Conflict, Red Shoe
+
+Weapon: Rusted-out Shooting' Iron
+
+The last source of noncombat isn't so easy, there are two choices at this point.
+
+Firstly, you can pick up another 5% noncombat in the Haunted Ballroom NC for a total of 25% noncombat. This requires adventuring in manor to progress the manor quest.
+https://kol.coldfront.net/thekolwiki/index.php/Strung-Up_Quartet
+
+The second option, or if you want 26% noncombat would be to acquire the shirt or pants from the outfit Xiblaxian Stealth Suit.
+
+This however, can/will be expensive to acquire and is generally ill advised.
+
+You could also pick up a Tuxedo Shirt for more adventures from booze, you don't need to wear this.
+
+Finally, you want to get as much +adv as you can.
+
+A clockwork maid (Recommended to buy from a no-limit store), and perhaps a pagoda. Equipment wise, you have the offhand 'ancient calendar', and shirt 'Shoe Ad T-Shirt'
+
+The reason behind requiring Cleesh is to avoid progressing in sewers, but still win fights to gain consumables from the Lil' Barrel Mimic.
+
+## INGAME SETUP SIMPLE
+
 To set up your multi, please have it idle with as much +adv rollover gear
-on as possible, amd at least 1 hp regen/fight. Whatsian Ionic Pliers in
+on as possible, and at least 1 hp regen/fight. Whatsian Ionic Pliers in
 the offhand are recommended as a cheap and plentiful option for this.
 
-You will also require an autoattack with the name CAGEBOT (all caps) that
-reads "runaway;repeat". If your account has means of running freely,
-feel free to add them too, but I take no responsibility for failures.
 If you need to tiebreak equipment, +noncombat rate is nice too.
 
-Optionally manually stock bot with the items below for consumption.
+Manually stock bot with the items below for consumption.
 Bot must be at least the associated level to consume these items.
 Currently bot will not buy these, only uses from inventory.
 
@@ -58,23 +106,46 @@ Currently bot will not buy these, only uses from inventory.
 - Middle of the Road™ brand whiskey (No level requirement)
 
 ## RUNNING
+
 To run cagebot, either run `npm run start` in the root directory, or just `node dist/index.js`, both are equivalent.
 
 ## USAGE
+
 Cagebot is used by sending in-game whispers to the account with which it is associated. (To do this, enter `/w [accountname] [command]` into the in-game chat.) The commands understood by Cagebot are as follows:
 
 - `cage [clanname]`: If cagebot is whitelisted to a clan with the supplied name and not presently caged, it whitelists into that clan and attempts to get caged in its hobopolis. This command will fail if:
-  * Cagebot is already in a cage
-  * Cagebot does not have a whitelist to any clans with the supplied name.
-  * Cagebot is whitelisted to multiple clans with the supplied name (for example, if it is provided `Phill` and has whitelists to both `Phill's Good Clan` and `Phill's Bad Clan`
-  * Cagebot does not have sufficient clan permissions to adventure in hobopolis in the specified clan.
-  * Hobopolis is not open in the specified clan.
-  * Cagebot falls to eleven or fewer adventures remaining.
+  - Cagebot is already in a cage
+  - Cagebot does not have a whitelist to any clans with the supplied name.
+  - Cagebot is whitelisted to multiple clans with the supplied name (for example, if it is provided `Phill` and has whitelists to both `Phill's Good Clan` and `Phill's Bad Clan`
+  - Cagebot does not have sufficient clan permissions to adventure in hobopolis in the specified clan.
+  - Hobopolis is not open in the specified clan.
+  - Cagebot falls to eleven or fewer adventures remaining.
 - `escape`: If cagebot is presently caged, and the person sending the `escape` command is the one who sent the original `cage` command, it attempts to free itself from the cage. If it has been released via The Former Or The Ladder, it will escape without spending turns, otherwise, it spends ten adventures to chew out of the cage.
 - `release`: As escape, attempts to escape from the cage it is presently in, however this can be used by anyone, not just the original sender of the `cage` command. The `release` command can only be used if cagebot has been caged for at least an hour (to prevent cagebot getting stuck due to the original cager logging off for the day, for example), or if cagebot cannot ascertain who initially caged it (for example, because the bot was restarted while in a cage)
 - `status`: Returns the current status of cagebot. Specifically:
-  * Whether it is in a cage.
-  * If so, at whose request, and for how long.
-  * Whether the release command is usable, and if not, how long until it will be.
-  * How many adventures it has remaining.
+  - Whether it is in a cage.
+  - If so, at whose request, and for how long.
+  - Whether the release command is usable, and if not, how long until it will be.
+  - How many adventures it has remaining.
 - `help`: Returns a help message detailing all of the above commands.
+- `diet`: More of a debug command, this tells the requester the current status of the bot's diet. How much food and drink it has remaining. Currently, the api response will return more information.
+
+## APIs
+
+Cagebot has as part of its extra functionality the ability to respond to messages in a json format which is easier for scripts to manage.
+
+Each response should not have any spaces in them, which sidesteps the issue with KoL injecting spaces into long strings as an interesting workaround for wrapped messages.
+So to parse a json response, the user is expected to strip any spaces from the message before attempting to parse it.
+
+A json response can be requested by use of appending .api to the following, `cage, status, escape, release, diet`
+The different responses can be seen in utils/JsonResponses.ts
+
+If a caging is requested through an .api request, then the unbaited by a third party warning will be sent as a json string.
+
+## Whiteboard
+
+If the bot has write access to the clan dungeon's whiteboard, then it will edit the whiteboard if it detects the whiteboard cage/uncage strings as defined in the cagebot's config.
+
+So editing the clan's whiteboard to contain the uncaged message, will have the cagebot edit the whiteboard when a caging is requested to note that it's been caged. And edit again to the uncaged message when it fails to be caged, or is released.
+
+The whiteboard message does not need to consist solely of the cagebot message, but the exact message is case sensitive.

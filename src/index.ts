@@ -1,5 +1,23 @@
 import * as dotenv from "dotenv";
+import { readFileSync } from "fs";
 import { CageBot } from "./CageBot";
+import { Settings } from "./utils/Typings";
+
+const origlog = console.log;
+
+console.log = function (obj, ...placeholders) {
+  if (obj == null) obj = "";
+
+  if (typeof obj === "string") {
+    placeholders.unshift(new Date(Date.now()).toLocaleString() + "\t" + obj);
+  } else {
+    // This handles console.log( object )
+    placeholders.unshift(obj);
+    placeholders.unshift(new Date(Date.now()).toLocaleString() + "\t%j");
+  }
+
+  origlog.apply(this, placeholders);
+};
 
 dotenv.config();
 console.log("  _____                 _           _   ");
@@ -50,6 +68,22 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
   console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 } else {
-  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS);
+  const settings = JSON.parse(readFileSync("./data/Settings.json", "utf-8") || "{}");
+
+  for (let key of Object.keys(settings)) {
+    if (!process.env[key]) {
+      continue;
+    }
+
+    console.log(`Overriding setting '${key}=${process.env[key]}' as defined in .env`);
+    (settings as any)[key] = process.env[key];
+  }
+
+  settings.maintainAdventures = parseInt(
+    process.env["maintainAdventures"] || settings.maintainAdventures || "100"
+  );
+  settings.delayBetweenClanRepeats = parseInt(settings.delayBetweenClanRepeats || "3600");
+
+  const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, settings as Settings);
   cageBot.start();
 }
