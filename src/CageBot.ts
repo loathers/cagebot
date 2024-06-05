@@ -1,432 +1,644 @@
-import { KoLClan, KoLClient, KoLUser, PrivateMessage } from "./KoLClient";
 import { Mutex } from "async-mutex";
-
-type CagedStatus = {
-  requester: KoLUser;
-  clan: string;
-  cagedAt: number;
-};
+import { DietHandler } from "./handlers/DietHandler";
+import { CagingHandler } from "./handlers/CagingHandler";
+import { UncageHandler } from "./handlers/UncageHandler";
+import { BusyResponse, StatusResponse } from "./utils/JsonResponses";
+import { KoLClient } from "./utils/KoLClient";
+import {
+  ChatMessage,
+  CageTask,
+  Settings,
+  KoLUser,
+  KoLClan,
+  LastClanRequest as CageCooldown,
+  KoLSkill,
+} from "./utils/Typings";
+import {
+  humanReadableTime,
+  updateWhiteboard,
+  sendApiResponse,
+  saveSettings,
+  loadSettings,
+  toJson,
+  createApiResponse,
+  getMinusCombatSkills,
+} from "./utils/Utils";
+import { readFileSync } from "fs";
 
 const mutex = new Mutex();
 
 export class CageBot {
-  private _privateMessages: PrivateMessage[] = [];
+  private _privateMessages: ChatMessage[] = [];
   private _client: KoLClient;
   private _amCaged: boolean = false;
-  private _cageStatus?: CagedStatus;
+  private _cageTask?: CageTask;
+  private _settings: Settings;
+  private _lastCheckForThirdPartyUncaging: number = Date.now();
+  private _diet: DietHandler;
+  private _cageHandler: CagingHandler;
+  private _uncageHandler: UncageHandler;
+  private _recentCages: CageCooldown[] = [];
+  private _knownSkills: KoLSkill[] = [];
 
-  constructor(username: string, password: string) {
+  constructor(username: string, password: string, settings: Settings) {
     this._client = new KoLClient(username, password);
+    this._settings = settings;
+
+    this._diet = new DietHandler(this);
+    this._cageHandler = new CagingHandler(this);
+    this._uncageHandler = new UncageHandler(this);
   }
 
-  start(): void {
+  getKnownSkills() {
+    return this._knownSkills;
+  }
+
+  addClanCooldown(user: KoLUser, clan: KoLClan) {
+    this._recentCages.push({
+      user: user,
+      clan: clan,
+      date: Date.now(),
+      expiresAfter: (this._settings.delayBetweenClanRepeats || 3600) * 1000,
+    });
+  }
+
+  getClanCooldown(clan: KoLClan): CageCooldown | undefined {
+    // While array has entries, and while entry has expired.
+    while (
+      this._recentCages.length > 0 &&
+      this._recentCages[0].date + this._recentCages[0].expiresAfter < Date.now()
+    ) {
+      // Remove the first element
+      this._recentCages.shift();
+    }
+
+    return this._recentCages.find((c) => c.clan.id === clan.id);
+  }
+
+  getClient(): KoLClient {
+    return this._client;
+  }
+
+  getSettings(): Settings {
+    return this._settings;
+  }
+
+  getCageTask(): CageTask | undefined {
+    return this._cageTask;
+  }
+
+  getDietHandler(): DietHandler {
+    return this._diet;
+  }
+
+  setCagedStatus(caged: boolean, task?: CageTask) {
+    this._amCaged = caged;
+    this._cageTask = task;
+  }
+
+  async saveSettings() {
+    if (!this.getDietHandler().getMaxDrunk()) {
+      return;
+    }
+
+    const status = await this.getClient().getStatus();
+
+    saveSettings(
+      status.turnsPlayed,
+      this.getDietHandler().getMaxDrunk() || 14,
+      this._knownSkills,
+      this.getCageTask()
+    );
+  }
+
+  async loadSettings() {
+    // If the bot is not caged, or its busy, or it has a cage task already
+    if (!this.isCaged() || this.isBusy() || this._cageTask) {
+      return;
+    }
+
+    const settings = loadSettings();
+
+    if (!settings || !settings.validAtTurn) {
+      console.log("Unable to load valid runstate");
+      return;
+    }
+
+    const status = await this.getClient().getStatus();
+
+    // If this was saved at turn X, but the current turn has differed
+    if (settings.validAtTurn != status.turnsPlayed) {
+      console.log("Runstate differs from expected, not loading.");
+      return;
+    }
+
+    this.getDietHandler().setMaxDrunk(settings.maxDrunk);
+    this._cageTask = settings.cageTask;
+    this._knownSkills = getMinusCombatSkills().filter((skill) =>
+      settings.knownSkills.includes(skill.skillId)
+    );
+
+    console.log("Loaded previous state from saved file");
+  }
+
+  start() {
     console.log("Starting Cagebot...");
-    this.initialSetup().then(() => {
+    console.log(`We're trying to maintain ${this._settings.maintainAdventures} adventures`);
+    // TODO Current adventures
+
+    const loginIfSuccessful = () => {
+      if (this._client.isRollover()) {
+        console.log("Rollover is in progress, delaying login for 60s");
+        setTimeout(loginIfSuccessful, 60_000);
+        return;
+      }
+
+      this.performLoginTasks();
+    };
+
+    this._client.logIn().then(() => {
+      loginIfSuccessful();
+    });
+  }
+
+  performLoginTasks() {
+    this.doInitialSetup().then(async () => {
+      const secondsToRollover = await this._client.getSecondsToRollover();
+
+      console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
+
+      if (this._knownSkills.length > 0) {
+        console.log(
+          `We know the skill${this._knownSkills.length != 1 ? "s" : ""}: ${this._knownSkills
+            .map((s) => `'${s.name}'`)
+            .join(", ")} and will attempt to maintain them.`
+        );
+      }
+
       console.log("Initial setup complete. Polling messages.");
-      setInterval(
-        async () => this._privateMessages.push(...(await this._client.fetchNewWhispers())),
-        3000
-      );
+
+      let handlingRollover = this._client.isRollover();
+
+      setInterval(async () => {
+        this._privateMessages.push(...(await this._client.fetchNewWhispers()));
+
+        // If the last whisper check was during rollover, and it's no longer rollover
+        if (handlingRollover && !this._client.isRollover()) {
+          handlingRollover = false;
+
+          await this.testForThirdPartyUncaging();
+
+          if (!this.isCaged()) {
+            await this._diet.maintainAdventures();
+          }
+        } else {
+          handlingRollover = this._client.isRollover();
+        }
+      }, 3000);
       this.processMessage();
     });
   }
 
-  async initialSetup(): Promise<void> {
-    this._amCaged = /Despite All Your Rage/.test(await this._client.visitUrl("place.php"));
+  async testForThirdPartyUncaging(): Promise<void> {
+    if (!(await this._client.loggedIn())) return;
+
+    this._lastCheckForThirdPartyUncaging = Date.now();
+    let page = await this._client.visitUrl("place.php");
+
+    if (/Pop!/.test(page)) {
+      page = await this._client.visitUrl("choice.php", {
+        whichchoice: 296,
+        option: 1,
+      });
+    }
+
+    this._amCaged = /Despite All Your Rage/.test(page);
+
     if (!this._amCaged) {
-      if (!/CAGEBOT/.test(await this._client.visitUrl("account_combatmacros.php"))) {
-        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
-        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.log("!!! In order to function, this account!!!");
-        console.log("!!! MUST have a macro named CAGEBOT   !!!");
-        console.log('!!! reading "runaway;repeat;". Please !!!');
-        console.log("!!! make that now and rerun.          !!!");
-        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.log("!!!WARNINGWARNINGWARNINGWARNINGWARNING!!!");
-        console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        throw "Macro required to continue.";
-      } else {
-        const combatTab = await this._client.visitUrl("account.php", {
-          tab: "combat",
-        });
-        const macroId = combatTab.match(/value="(\d+)">CAGEBOT/)[1];
-        await this._client.visitUrl("account.php", {
-          am: 1,
-          action: "flag_aabosses",
-          value: 1,
-          ajax: 1,
-        });
-        await this._client.visitUrl("account.php", {
-          am: 1,
-          action: "autoattack",
-          value: macroId,
-          ajax: 1,
-        });
+      this._cageTask = undefined;
+      await updateWhiteboard(this, this._amCaged);
+    }
+  }
+
+  async doInitialSetup(): Promise<void> {
+    await this.doSetup();
+    await this.getClient().useChatMacro("/listenon Hobopolis");
+
+    if (this.isCaged()) {
+      console.log("We appear to be caged.");
+      await this.loadSettings();
+      return;
+    }
+
+    // Ensure the "Area might be too tough for you" warning is disabled
+    await this._client.visitUrl("account.php", {
+      am: 1,
+      action: "flag_ignorezonewarnings",
+      value: 1,
+      ajax: 1,
+    });
+
+    let macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
+    const macroText = readFileSync("./data/CombatMacro.txt", "utf-8");
+
+    if (!macro) {
+      console.log("Combat Macro not found, we will be saving the default!");
+
+      await this.getClient().createCombatMacro("CAGEBOT", macroText);
+      macro = (await this.getClient().getCombatMacros()).find((m) => m.name === "CAGEBOT");
+
+      if (!macro) {
+        throw "Failed to create the CAGEBOT macro!";
+      }
+    } else {
+      const theirMacro = await this.getClient().getCombatMacro(macro);
+
+      if (theirMacro !== macroText) {
+        console.log("Custom CAGEBOT macro detected! This is probably fine.");
       }
     }
+
+    const currentMacro = await this.getClient().getAutoAttackMacro();
+
+    if (!currentMacro || currentMacro.name !== "CAGEBOT") {
+      if (!currentMacro) {
+        console.log("AutoAttack macro is missing, changing that to CAGEBOT");
+        await this.getClient().setAutoAttackMacro(macro);
+      } else {
+        console.log(
+          "AutoAttack Macro is not CAGEBOT, will leave untouched but this may be an error."
+        );
+      }
+    }
+
+    const combatTab = await this._client.visitUrl("account.php", {
+      tab: "combat",
+    });
+    const macroId = combatTab.match(/value="(\d+)">CAGEBOT/)[1];
+    await this._client.visitUrl("account.php", {
+      am: 1,
+      action: "flag_aabosses",
+      value: 1,
+      ajax: 1,
+    });
+    await this._client.visitUrl("account.php", {
+      am: 1,
+      action: "autoattack",
+      value: macroId,
+      ajax: 1,
+    });
+  }
+
+  async doSetup(): Promise<void> {
+    await this.testForThirdPartyUncaging();
+
+    await this.getDietHandler().doSetup();
+
+    if (!this.isCaged()) {
+      const knownSkills = await this._client.getSkills();
+      this._knownSkills = getMinusCombatSkills().filter((skill) =>
+        knownSkills.includes(skill.skillId)
+      );
+
+      await this._diet.maintainAdventures();
+    }
+  }
+
+  isCaged(): boolean {
+    return this._amCaged;
+  }
+
+  isBusy(): boolean {
+    return this._cageTask != undefined && !this._amCaged;
+  }
+
+  async runBlockingRequest(message: ChatMessage, toCall: () => Promise<any>) {
+    if (this.isBusy() || mutex.isLocked()) {
+      if (message.apiRequest) {
+        await sendApiResponse(message, "Busy", "already_in_use");
+      } else {
+        await message.reply(
+          "Sorry, I am currently busy processing a request. Please wait, or send a status request."
+        );
+      }
+
+      return;
+    }
+
+    mutex.runExclusive(async () => {
+      await toCall();
+    });
+  }
+
+  async processHobopolisMessage(message: ChatMessage): Promise<void> {
+    // If not a clan dungeon announcement
+    if (!message.who || message.who.id !== "-2") {
+      return;
+    }
+
+    const task = this._cageTask;
+
+    if (!this._amCaged || !task || !task.requester) {
+      return;
+    }
+
+    let rescued = message.msg.match(/(.*?) has rescued (.*?) from the C. H. U. M.s./);
+
+    if (rescued != null) {
+      if (rescued[2].toLowerCase() != this._client.getMe()?.name) {
+        return;
+      }
+
+      if (this._cageTask) {
+        console.log(`${rescued[1]} rescued me from the C. H. U. M.s cage, that was nice of them.`);
+
+        // No API responses for this, a script likely would leave the cagebot in.
+        this._client.useChatMacro(
+          `/w ${rescued[1].replaceAll(
+            " ",
+            "_"
+          )} Thank you for rescuing me! You didn't have to though!`
+        );
+      }
+
+      return;
+    }
+
+    if (
+      message.msg.toLowerCase() !==
+      `${task.requester.name.toLowerCase()} has made it through the sewer.`
+    ) {
+      return;
+    }
+
+    if (!task.autoRelease) {
+      console.log(`${task.requester.name} (#${task.requester.id}) has made it through the sewers.`);
+
+      setTimeout(() => {
+        // If not the same cage task, aka they were released. Return
+        if (this._cageTask != task) {
+          return;
+        }
+
+        console.log(
+          `A minute has passed, asking ${task.requester.name} (#${task.requester.id}) if they'd like me to escape.`
+        );
+
+        if (task.apiResponses) {
+          this.getClient().sendPrivateMessage(
+            task.requester,
+            createApiResponse("Notification", "remember_to_unbait")
+          );
+        } else {
+          this._client.sendPrivateMessage(
+            task.requester,
+            `You've made it through the sewers! If cagebait is no longer required, whisper me "escape".`
+          );
+        }
+      }, 60000);
+
+      return;
+    }
+
+    console.log(
+      `${task.requester.name} (#${task.requester.id}) has made it through the sewers. Requesting escape as per whiteboard.`
+    );
+
+    // Requester made it through the sewers. Add to private messages.
+    const fakeMessage: ChatMessage = {
+      private: true,
+      who: task.requester,
+      msg: `escape${task.apiResponses ? ".api" : ""}`,
+      apiRequest: task.apiResponses,
+      reply: async (message: string) =>
+        await this.getClient().sendPrivateMessage(task.requester, message),
+    };
+
+    await this.runBlockingRequest(fakeMessage, () => this._uncageHandler.escapeCage(fakeMessage));
   }
 
   async processMessage(): Promise<void> {
     const message = this._privateMessages.shift();
-    if (message) {
-      await mutex.runExclusive(async () => {
-        console.log(`Processing whisper from ${message.who.name} (#${message.who.id})`);
-        const processedMsg = message.msg.toLowerCase();
-        if (processedMsg.startsWith("status")) await this.statusReport(message, true);
-        else if (processedMsg.startsWith("cage")) await this.becomeCaged(message);
-        else if (processedMsg.startsWith("escape")) await this.escapeCage(message);
-        else if (processedMsg.startsWith("release")) await this.releaseCage(message);
-        else if (processedMsg.startsWith("help")) await this.helpText(message);
-        else await this.didntUnderstand(message);
-      });
-      this.processMessage();
-    } else setTimeout(() => this.processMessage(), 1000);
-  }
 
-  async becomeCaged(message: PrivateMessage): Promise<void> {
-    const clanName = message.msg.slice(5);
-    console.log(`${message.who.name} (#${message.who.id}) requested caging in clan "${clanName}"`);
-    if (this._amCaged) {
-      console.log(`Already caged. Sending status report instead.`);
-      await this.statusReport(message);
-    } else {
-      const whitelists = (await this._client.getWhitelists()).filter((clan: KoLClan) =>
-        clan.name.toLowerCase().includes(clanName.toLowerCase())
-      );
-      if (whitelists.length > 1) {
-        console.log(`Clan name "${clanName}" ambiguous, aborting.`);
-        this._client.sendPrivateMessage(
-          message.who,
-          `I'm in multiple clans named ${clanName}: ${whitelists.join(
-            ", "
-          )}. Please be more specific.`
-        );
-      } else if (whitelists.length < 1) {
-        console.log(`Clan name "${clanName}" does not match any whitelists, aborting.`);
-        this._client.sendPrivateMessage(
-          message.who,
-          `I'm not in any clans named ${clanName}. Check your spelling, or ensure I have a whitelist.`
-        );
+    if (message) {
+      if (!message.private) {
+        await this.processHobopolisMessage(message);
       } else {
-        const targetClan = whitelists[0];
         console.log(
-          `Clan name "${clanName}" matched to whitelisted clan "${targetClan.name}". Attempting to whitelist.`
+          `Processing whisper${message.apiRequest ? ".api" : ""} from ${message.who.name} (#${
+            message.who.id
+          })`
         );
-        await this._client.joinClan(targetClan);
-        if ((await this._client.myClan()) !== targetClan.id) {
-          console.log(`Whitelisting to clan "${targetClan.name}" failed, aborting.`);
-          await this._client.sendPrivateMessage(
-            message.who,
-            `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
-          );
+        const processedMsg = message.msg.toLowerCase();
+
+        if (processedMsg.startsWith("cage")) {
+          await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message));
+        } else if (processedMsg.startsWith("release")) {
+          await this.runBlockingRequest(message, () => this._uncageHandler.releaseCage(message));
+        } else if (processedMsg.startsWith("escape")) {
+          await this.runBlockingRequest(message, () => this._uncageHandler.escapeCage(message));
+        } else if (processedMsg.startsWith("status")) {
+          await this.sendStatus(message, true);
+        } else if (processedMsg.startsWith("diet")) {
+          await this._diet.sendDiet(message);
+        } else if (processedMsg.startsWith("help")) {
+          await this.sendHelp(message);
         } else {
-          if (!/Old Sewers/.test(await this._client.visitUrl("clan_hobopolis.php"))) {
-            console.log(`Sewers in clan "${targetClan.name}" inaccessible, aborting.`);
-            await this._client.sendPrivateMessage(
-              message.who,
-              `I can't seem to access the sewers in ${targetClan.name}. Is Hobopolis open? Do I have the right permissions?`
-            );
-          } else {
-            let grates = 0;
-            let valves = 0;
-            const startAdv = await this._client.getAdvs();
-            await this._client.sendPrivateMessage(
-              message.who,
-              `Attempting to get caged in ${targetClan.name}.`
-            );
-            console.log(`Beginning turns in ${targetClan.name} sewers.`);
-            while (!this._amCaged && (await this._client.getAdvs()) > 11 && (await this._client.getDrunk()) <= 14) {
-              const adventureResponse = await this._client.visitUrl("adventure.php", {
-                snarfblat: 166,
-              });
-              if (/Despite All Your Rage/.test(adventureResponse)) {
-                this._amCaged = true;
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 211,
-                  option: 2,
-                });
-                console.log(`Caged!`);
-              } else if (/Disgustin\' Junction/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 198,
-                  option: 3,
-                });
-                grates += 1;
-                console.log(`Opened grate. Grate(s) so far: ${grates}.`);
-              } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 197,
-                  option: 3,
-                });
-                valves += 1;
-                console.log(`Opened valve. Valve(s) so far: ${valves}.`);
-              } else if (/The Former or the Ladder/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 199,
-                  option: 3,
-                });
-              } else if (/Pop!/.test(adventureResponse)) {
-                await this._client.visitUrl("choice.php", {
-                  whichchoice: 296,
-                  option: 1,
-                });
-              }
-              if (!this._amCaged && /whichchoice/.test(await this._client.visitUrl("place.php"))) {
-                console.log(
-                  `Unexpectedly still in a choice after running possible choices. Aborting.`
-                );
-                break;
-              }
-            }
-            if (this._amCaged) {
-              this._cageStatus = {
-                clan: targetClan.name,
-                requester: message.who,
-                cagedAt: Date.now(),
-              };
-              console.log(`Successfully caged in clan ${targetClan.name}. Reporting success.`);
-              await this._client.sendPrivateMessage(
-                message.who,
-                `Clang! I am now caged in ${targetClan.name}. Release me later by whispering "escape" to me.`
-              );
-            } else if ( !(await this.advLeft(message)) ) {
-              console.log(
-                `Ran out of adventures attempting to get caged in clan ${targetClan.name}. Aborting.`
-              );
-              await this._client.sendPrivateMessage(
-                message.who,
-                `I ran out of adventures trying to get caged in ${targetClan.name}.`
-              );
-            } else {
-              console.log(
-                `Unexpected error occurred attempting to get caged in clan ${targetClan.name}. Aborting.`
-              );
-              await this._client.sendPrivateMessage(
-                message.who,
-                `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
-              );
-            }
-            const endAdvs = await this._client.getAdvs();
-            const spentAdvs = startAdv - endAdvs;
-            await this._client.sendPrivateMessage(
-              message.who,
-              `I opened ${grates} grate${grates === 1 ? "" : "s"} and turned ${valves} valve${
-                valves === 1 ? "" : "s"
-              } on the way, and spent ${spentAdvs} adventure${
-                spentAdvs === 1 ? "" : "s"
-              } (${endAdvs} remaining).`
-            );
-          }
+          await this.didntUnderstand(message);
         }
       }
-    }
-  }
 
-  async escapeCage(message: PrivateMessage): Promise<void> {
-    console.log(`${message.who.name} (#${message.who.id}) requested escape from cage.`);
-    if (!this._amCaged || (this._cageStatus && this._cageStatus.requester.id !== message.who.id)) {
-      if (!this._amCaged) console.log(`Not currently caged, sending status report instead.`);
-      else console.log(`User not authorised to initiate escape, sending status report instead.`);
-      await this.statusReport(message);
+      this.processMessage();
     } else {
-      await this.chewOut();
-      console.log(`Successfully chewed out of cage. Reporting success.`);
-      await this._client.sendPrivateMessage(message.who, "Chewed out! I am now uncaged.");
+      setTimeout(() => this.processMessage(), 1000);
     }
   }
 
-  async releaseCage(message: PrivateMessage): Promise<void> {
-    console.log(`${message.who.name} (#${message.who.id}) requested release from cage.`);
+  async safelyTestForThirdPartyUncaging() {
+    // If 15min has elapsed from last caged check
     if (
-      !this._amCaged ||
-      (this._cageStatus && !this.releaseable() && message.who.id !== this._cageStatus.requester.id)
+      this._amCaged &&
+      !mutex.isLocked() &&
+      !this.isBusy() &&
+      this._lastCheckForThirdPartyUncaging + 15 * 60 < Date.now()
     ) {
-      if (!this._amCaged) console.log(`Not currently caged, sending status report instead.`);
-      else console.log(`Release timer has not yet expired, sending status report instead.`);
-      await this.statusReport(message);
-    } else {
-      const prevStatus = this._cageStatus;
-      await this.chewOut();
-      console.log(`Successfully chewed out of cage. Reporting success.`);
-      await this._client.sendPrivateMessage(message.who, "Chewed out! I am now uncaged.");
-      if (prevStatus && prevStatus.requester.id !== message.who.id) {
-        console.log(
-          `Reporting release to original requester ${prevStatus.requester.name} (#${prevStatus.requester.id}).`
-        );
-        await this._client.sendPrivateMessage(
-          prevStatus.requester,
-          `I chewed out of the Hobopolis instance in ${prevStatus.clan} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`
-        );
-      }
+      await mutex.runExclusive(async () => {
+        await this.testForThirdPartyUncaging();
+      });
     }
   }
 
-  async helpText(message: PrivateMessage): Promise<void> {
+  async sendHelp(message: ChatMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) requested help.`);
-    await this._client.sendPrivateMessage(
-      message.who,
+
+    await message.reply(
       `Hi! I am ${this._client.getMe()?.name} (#${
         this._client.getMe()?.id
       }), and I am running Phillammon's Cagebot script.`
     );
-    await this._client.sendPrivateMessage(message.who, `My commands:`);
-    await this._client.sendPrivateMessage(message.who, `- status: Get my current status`);
-    await this._client.sendPrivateMessage(
-      message.who,
+
+    await message.reply(`My commands:`);
+    await message.reply(`- status: Get my current status`);
+    await message.reply(
       `- cage [clanname]: Try to get caged in the specified clan's hobopolis instance`
     );
-    await this._client.sendPrivateMessage(
-      message.who,
+    await message.reply(
       `- escape: If you're the person who requested I got caged, chews out of the cage I'm in`
     );
-    await this._client.sendPrivateMessage(
-      message.who,
+    await message.reply(
       `- release: Chew out of the cage, REGARDLESS of who is responsible for the caging. Only usable if I've been caged for an hour or something's gone wrong.`
     );
-    await this._client.sendPrivateMessage(message.who, `- help: Displays this message.`);
+    await message.reply(`- help: Displays this message.`);
   }
 
-  async statusReport(message: PrivateMessage, directlyRequested: boolean = false): Promise<void> {
-    if (directlyRequested)
+  async sendStatus(message: ChatMessage, directlyRequested: boolean = false): Promise<void> {
+    if (directlyRequested) {
       console.log(`${message.who.name} (#${message.who.id}) requested status report.`);
+    }
+
+    await this.safelyTestForThirdPartyUncaging();
+
+    if (message.apiRequest) {
+      await this.statusReportByApi(message);
+    } else {
+      await this.statusReportByNonApi(message);
+    }
+  }
+
+  private async statusReportByNonApi(message: ChatMessage) {
+    const status = await this._client.getStatus();
+
     if (this._amCaged) {
-      if (this._cageStatus) {
-        const cageSecs = this.secondsInCage();
-        await this._client.sendPrivateMessage(
-          message.who,
-          `I have been caged in ${this._cageStatus.clan} for ${this.humanReadableTime(
+      if (this._cageTask) {
+        const cageSecs = this.secondsInTask();
+
+        await message.reply(
+          `I have been caged in ${this._cageTask.clan.name} for ${humanReadableTime(
             cageSecs
-          )}, at the request of ${this._cageStatus.requester.name} (#${
-            this._cageStatus.requester.id
-          }).`
+          )}, at the request of ${this._cageTask.requester.name} (#${this._cageTask.requester.id}).`
         );
+
         if (this.releaseable()) {
-          await this._client.sendPrivateMessage(
-            message.who,
-            `As I've been caged for at least an hour, anyone can release me by whispering "release" to me. I have ${await this._client.getAdvs()} adventures left.`
+          await message.reply(
+            `As I've been caged for at least an hour, anyone can release me by whispering "release" to me. I have ${status.adventures} adventures left.`
           );
         } else {
-          await this._client.sendPrivateMessage(
-            message.who,
-            `They can release me at any time by whispering "escape" to me, or anyone can release me by whispering "release" to me in ${this.humanReadableTime(
+          await message.reply(
+            `They can release me at any time by whispering "escape" to me, or anyone can release me by whispering "release" to me in ${humanReadableTime(
               3600 - cageSecs
-            )}. I have ${await this._client.getAdvs()} adventures left.`
+            )}. I have ${status.adventures} adventures left.`
           );
         }
       } else {
-        await this._client.sendPrivateMessage(
-          message.who,
-          `I am caged, but I don't know where, when, or for how long. Anyone can release me by whispering "release" to me. I have ${await this._client.getAdvs()} adventures left.`
+        await message.reply(
+          `I am caged, but I don't know where, when, or for how long. Anyone can release me by whispering "release" to me. I have ${status.adventures} adventures left.`
         );
       }
     } else {
-      await this._client.sendPrivateMessage(
-        message.who,
-        `I am not presently caged and have ${await this._client.getAdvs()} adventures left.`
-      );
+      if (this._cageTask) {
+        await message.reply(
+          `I am currently processing a cage request and have ${status.adventures} adventures left.`
+        );
+      } else {
+        await message.reply(
+          `I am not presently caged and have ${status.adventures} adventures left.`
+        );
+      }
     }
-	//always send info on how full the bot is.
-	//todo: assumes max values. Should check for actual
-	await this._client.sendPrivateMessage(
-        message.who,
-        `My current fullness is ${await this._client.getFull()}/15 and drunkeness is ${await this._client.getDrunk()}/14.`
-      );
+    //always send info on how full the bot is.
+    //todo: assumes max valves. Should check for actual
+    await message.reply(
+      `My current fullness is ${status.full}/15 and drunkeness is ${status.drunk}/${
+        this._diet.getMaxDrunk() || "???"
+      }.`
+    );
   }
 
-  async didntUnderstand(message: PrivateMessage): Promise<void> {
+  private async statusReportByApi(message: ChatMessage) {
+    const status = await this.getClient().getStatus();
+    let busyStatus: BusyResponse | undefined;
+
+    if (this._amCaged || this._cageTask) {
+      busyStatus = {
+        state: !this._amCaged
+          ? "Diving"
+          : this.releaseable() || !this._cageTask || this._cageTask.requester.id === message.who.id
+          ? "Releasable"
+          : "Caged",
+      };
+
+      if (this._cageTask) {
+        busyStatus.elapsed = this.secondsInTask();
+        busyStatus.player = parseInt(this._cageTask.requester.id);
+        busyStatus.clan = parseInt(this._cageTask.clan.id);
+      }
+    }
+
+    // The status is ideally one that you can strip all spaces from, and remain parsable
+    const apiStatus: StatusResponse = {
+      type: "status",
+      advs: status.adventures,
+      full: status.full,
+      maxFull: 15,
+      drunk: status.drunk,
+      maxDrunk: this._diet.getMaxDrunk(),
+      caged: this._amCaged,
+      status: busyStatus,
+    };
+
+    await message.reply(toJson(apiStatus));
+  }
+
+  async didntUnderstand(message: ChatMessage): Promise<void> {
     console.log(`${message.who.name} (#${message.who.id}) made an incomprehensible request.`);
-    await this._client.sendPrivateMessage(
-      message.who,
+
+    await message.reply(
       `I'm afraid I didn't understand that. Whisper me "help" for details of how to use me.`
     );
   }
 
-  humanReadableTime(seconds: number): string {
-    return `${Math.floor(seconds / 3600)}:${Math.floor((seconds % 3600) / 60)
-      .toString()
-      .padStart(2, "0")}:${Math.floor(seconds % 60)
-      .toString()
-      .padStart(2, "0")}`;
-  }
+  secondsInTask(): number {
+    if (!this._cageTask) {
+      throw "Tried to find time in cage with no cagestatus.";
+    }
 
-  secondsInCage(): number {
-    if (!this._cageStatus) throw "Tried to find time in cage with no cagestatus.";
-    return (Date.now() - this._cageStatus.cagedAt) / 1000;
+    return Math.floor((Date.now() - this._cageTask.started) / 1000);
   }
 
   releaseable(): boolean {
-    return this.secondsInCage() > 3600;
+    return this.secondsInTask() > 3600;
   }
 
-  async chewOut(): Promise<void> {
+  async chewOut(skipWhiteboard?: boolean): Promise<void> {
+    await this.testForThirdPartyUncaging();
+
     const adventureResponse = await this._client.visitUrl("adventure.php", {
-		snarfblat: 166,
-	  });
+      snarfblat: 166,
+    });
 
-	if (/Despite All Your Rage/.test(adventureResponse)) {
-	await this._client.visitUrl("choice.php", {
-		whichchoice: 212,
-		option: 1,
-	});
-	} else if (/Pop!/.test(adventureResponse)) {
-	await this._client.visitUrl("choice.php", {
-		whichchoice: 296,
-		option: 1,
-	});
-	}
-	  
+    if (/Despite All Your Rage/.test(adventureResponse)) {
+      // We do a regex choice on the choice ID because there are two possible choices
+      const chewResponse = await this._client.visitUrl("choice.php", {
+        whichchoice: / value=211>/.test(adventureResponse) ? 211 : 212,
+        option: 1,
+      });
+
+      if (!this._amCaged && /whichchoice/.test(chewResponse)) {
+        console.log(`Unexpectedly still in a choice after chewing through cage.`);
+        return;
+      }
+    } else if (/Pop!/.test(adventureResponse)) {
+      await this._client.visitUrl("choice.php", {
+        whichchoice: 296,
+        option: 1,
+      });
+    }
+
     this._amCaged = false;
-    this._cageStatus = undefined;
-  }
+    this._cageTask = undefined;
 
-  async advLeft(message: PrivateMessage): Promise<boolean> {
-    const beforeAdv = await this._client.getAdvs();
-	if (beforeAdv > 11){
-		return true;
-	}
-	
-	const currentFull = await this._client.getFull();
-	const currentDrunk = await this._client.getDrunk();	
-	if((currentFull >=15) && (currentDrunk >= 14)){
-		// have consumed as much as we can for the day and low on adventures
-		return false;
-	}
-
-	const currentLevel = await this._client.getLevel();
-	let itemConsumed = "";
-	if ((currentFull <= 9) && (currentLevel >= 8)){
-		//eat Fleetwood Mac 'n' Cheese since >= 6 fullness available and sufficient level
-		itemConsumed = "Fleetwood mac 'n' cheese";
-		console.log(`Attempting to eat ${itemConsumed}`);
-		this._client.eat(7215);
-	}
-	else if ((currentFull <= 12) && (currentLevel >= 7)){
-		//eat Crimbo pie since >= 3 fullness available and sufficient level
-		itemConsumed = "Crimbo pie";
-		console.log(`Attempting to eat ${itemConsumed}`);
-		this._client.eat(2767);
-	}
-	else if ((currentDrunk <= 8) && (currentLevel >= 11)){
-		//drink Psychotic Train wine since >= 6 drunk available and sufficient level
-		itemConsumed = "Psychotic Train wine";
-		console.log(`Attempting to drink ${itemConsumed}`);
-		this._client.drink(7370);
-	}
-	else if (currentDrunk <= 12){
-		//drink middle of the road since >= 2 drunk available 
-		itemConsumed = "Middle of the Road™ brand whiskey";
-		console.log(`Attempting to drink ${itemConsumed}`);
-		this._client.drink(9948);
-	}
-
-	const afterAdv = await this._client.getAdvs();
-	if(beforeAdv === afterAdv){
-		console.log(`I am out of ${itemConsumed}.`);
-		this._client.sendPrivateMessage(message.who, `Please tell my operator that I am out of ${itemConsumed}.`);
-	}
-
-	return afterAdv > 11;
-
+    if (!skipWhiteboard) {
+      await updateWhiteboard(this, this._amCaged);
+    }
   }
 }
