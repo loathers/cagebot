@@ -432,7 +432,9 @@ export class CageBot {
         const processedMsg = message.msg.toLowerCase();
 
         if (processedMsg.startsWith("cage")) {
-          await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message));
+          await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message, false));
+        } else if (processedMsg.startsWith("speedrun")) {
+          await this.runBlockingRequest(message, () => this._cageHandler.becomeCaged(message, true));
         } else if (processedMsg.startsWith("release")) {
           await this.runBlockingRequest(message, () => this._uncageHandler.releaseCage(message));
         } else if (processedMsg.startsWith("escape")) {
@@ -481,6 +483,9 @@ export class CageBot {
     await message.reply(`- status: Get my current status`);
     await message.reply(
       `- cage [clanname]: Try to get caged in the specified clan's hobopolis instance`
+    );
+    await message.reply(
+      `- speedrun [clanname]: Try to get caged in the specified clan's hobopolis instance without turning valves or checking cage. DO NOT use this if someone is in the cage`
     );
     await message.reply(
       `- escape: If you're the person who requested I got caged, chews out of the cage I'm in`

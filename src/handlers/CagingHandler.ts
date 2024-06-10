@@ -82,7 +82,7 @@ export class CagingHandler {
     return false;
   }
 
-  async becomeCaged(message: ChatMessage): Promise<void> {
+  async becomeCaged(message: ChatMessage, speedrun: boolean): Promise<void> {
     console.log(
       `${message.who.name} (#${message.who.id}) requested a caging${
         message.apiRequest ? " in json format" : ""
@@ -238,7 +238,7 @@ export class CagingHandler {
       return;
     }
 
-    await this.attemptCage(message, targetClan);
+    await this.attemptCage(message, targetClan, speedrun);
   }
 
   async attemptClanSwitch(targetClan: KoLClan): Promise<boolean> {
@@ -285,7 +285,7 @@ export class CagingHandler {
     return (await this.getClient().myClan()) === targetClan.id;
   }
 
-  async attemptCage(message: ChatMessage, targetClan: KoLClan): Promise<void> {
+  async attemptCage(message: ChatMessage, targetClan: KoLClan, speedrun: boolean): Promise<void> {
     const autoEscapeMessage = this.getSettings().whiteboardMessageAutoEscape;
 
     this._cagebot.setCagedStatus(false, {
@@ -437,15 +437,17 @@ export class CagingHandler {
           estimatedTurnsSpent--; // Free turn
         }
       } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
+        // Do not turn valves if speedrun option is enabled
+        const valveOption = speedrun === true ? 2 : 3;
         const choiceResponse = await this.getClient().visitUrl("choice.php", {
           whichchoice: 197,
-          option: 3,
+          option: valveOption,
         });
 
         if (/as the water level in the sewer lowers by a couple of inches/i.test(choiceResponse)) {
           valvesTwisted += 1;
           console.log(`Opened valve. Valve(s) so far: ${valvesTwisted}.`);
-        } else {
+        } else if (valveOption === 3) { // This will not be a free turn if the valve is not attempted
           estimatedTurnsSpent--; // Free turn
         }
       } else if (/The Former or the Ladder/.test(adventureResponse)) {
@@ -453,7 +455,8 @@ export class CagingHandler {
 
         // 2 = Fight a C. H. U. M.
         // 3 = Rescue
-        const option = triedToRescue ? 2 : 3;
+        // If speedrun option is enabled, don't check the cage at all
+        const option = triedToRescue || speedrun ? 2 : 3;
         // Always set this to true so follow up encounters to this NC will result in a fight.
         triedToRescue = true;
 
