@@ -614,8 +614,10 @@ export class CageBot {
     return this.secondsInTask() > 3600;
   }
 
-  async chewOut(skipWhiteboard?: boolean): Promise<void> {
+  async chewOut(skipWhiteboard?: boolean): Promise<boolean> { // Returns true if chewed, false if escaped without chewing
     await this.testForThirdPartyUncaging();
+
+    let chewed = false;
 
     const adventureResponse = await this._client.visitUrl("adventure.php", {
       snarfblat: 166,
@@ -628,9 +630,13 @@ export class CageBot {
         option: 1,
       });
 
+      if (!(/salt shaker/.test(chewResponse))) {
+        chewed = true;
+      }
+
       if (!this._amCaged && /whichchoice/.test(chewResponse)) {
         console.log(`Unexpectedly still in a choice after chewing through cage.`);
-        return;
+        return chewed;
       }
     } else if (/Pop!/.test(adventureResponse)) {
       await this._client.visitUrl("choice.php", {
@@ -645,5 +651,7 @@ export class CageBot {
     if (!skipWhiteboard) {
       await updateWhiteboard(this, this._amCaged);
     }
+
+    return chewed;
   }
 }

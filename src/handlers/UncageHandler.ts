@@ -30,14 +30,14 @@ export class UncageHandler {
 
       await this._cagebot.sendStatus(message);
     } else {
-      await this._cagebot.chewOut();
+      const chewResponse = await this._cagebot.chewOut();
 
-      console.log(`Successfully chewed out of cage. Reporting success.`);
+      console.log(chewResponse ? `Successfully chewed out of cage. Reporting success.` : `Successfully escaped without chewing. Reporting success.`);
 
       if (message.apiRequest) {
         await this._cagebot.sendStatus(message);
       } else {
-        await message.reply("Chewed out! I am now uncaged.");
+        await message.reply(chewResponse ? "Chewed out! I am now uncaged." : "Escaped without chewing! I am now uncaged.");
       }
 
       await this._cagebot.getDietHandler().maintainAdventures(message);
@@ -69,14 +69,14 @@ export class UncageHandler {
     } else {
       const prevStatus = this._cagebot.getCageTask();
 
-      await this._cagebot.chewOut();
+      const chewOutResults = await this._cagebot.chewOut();
 
-      console.log(`Successfully chewed out of cage. Reporting success.`);
+      console.log(chewOutResults ? `Successfully chewed out of cage. Reporting success.` : `Successfully escaped without chewing. Reporting success.`);
 
       if (message.apiRequest) {
         await this._cagebot.sendStatus(message);
       } else {
-        await message.reply("Chewed out! I am now uncaged.");
+        await message.reply(chewOutResults ? "Chewed out! I am now uncaged." : "Escaped without chewing! I am now uncaged.");
       }
 
       if (prevStatus && prevStatus.requester.id !== message.who.id) {
