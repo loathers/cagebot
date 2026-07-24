@@ -131,6 +131,13 @@ ${rows.map(([key, value]) => `<tr><td>${key}</td><td>${value}</td></tr>`).join("
     try {
       const path = (req.url || "/").split("?")[0];
 
+      // Healthcheck route: must not depend on KoL network state
+      if (path === "/up") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("OK");
+        return;
+      }
+
       if (!["/", "/status", "/status.json"].includes(path)) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end("Not Found");
