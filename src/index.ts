@@ -1,6 +1,7 @@
 import * as dotenv from "dotenv";
 import { readFileSync } from "fs";
 import { CageBot } from "./CageBot";
+import { startStatusServer } from "./StatusServer";
 import { Settings } from "./utils/Typings";
 
 const origlog = console.log;
@@ -85,5 +86,6 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   settings.delayBetweenClanRepeats = parseInt(settings.delayBetweenClanRepeats || "3600");
 
   const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, settings as Settings);
+  startStatusServer(cageBot);
   cageBot.start();
 }

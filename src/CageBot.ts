@@ -53,6 +53,10 @@ export class CageBot {
     return this._knownSkills;
   }
 
+  getPendingWhisperCount(): number {
+    return this._privateMessages.length;
+  }
+
   addClanCooldown(user: KoLUser, clan: KoLClan) {
     this._recentCages.push({
       user: user,
