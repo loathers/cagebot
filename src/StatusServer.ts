@@ -114,14 +114,11 @@ export function startStatusServer(cageBot: CageBot) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
-<style>
-body { font-family: monospace; max-width: 40em; margin: 2em auto; padding: 0 1em; }
-h1 span { color: ${data.caged ? "#c0392b" : "#27ae60"}; }
-td { padding: 0.2em 1em 0.2em 0; }
-</style>
 </head>
 <body>
-<h1>${title} — <span>${data.caged ? "CAGED" : "not caged"}</span></h1>
+<h1>${title} (<font color="${data.caged ? "red" : "green"}">${
+      data.caged ? "CAGED" : "not caged"
+    }</font>)</h1>
 <table>
 ${rows.map(([key, value]) => `<tr><td>${key}</td><td>${value}</td></tr>`).join("\n")}
 </table>
