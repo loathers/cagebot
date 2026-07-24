@@ -13,9 +13,20 @@ export type ClanWhiteboard = {
 
 export type SavedSettings = {
   validAtTurn: number;
-  maxDrunk: number;
+  maxDrunk?: number;
+  maxFull?: number;
   cageTask?: CageTask;
   knownSkills: number[];
+};
+
+export type OrganSize = {
+  stomach: number;
+  liver: number;
+};
+
+export type ReportedOrgans = {
+  stomach: string;
+  liver: string;
 };
 
 export type Diet = {
@@ -33,6 +44,8 @@ export type Settings = {
   whiteboardMessageUncaged?: string;
   whiteboardMessageAutoEscape?: string;
   delayBetweenClanRepeats?: number;
+  liverCapacity?: number;
+  stomachCapacity?: number;
 };
 
 export type LastClanRequest = {
@@ -114,6 +127,10 @@ export type KoLStatus = {
   meat: number;
   level: number;
   effects: KoLEffect[];
+  pwd: string | undefined;
+  flag_config: {
+    fullnesscounter: string;
+  };
 };
 
 export type KoLEffect = {
@@ -134,3 +151,4 @@ export type BuffySkill = {
   effectId: number;
   mpCost: number;
 };
+export type LoginResult = "Bad Login" | "Unknown" | "Maint" | "Success" | "Error";

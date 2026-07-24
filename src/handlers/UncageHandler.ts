@@ -13,7 +13,7 @@ export class UncageHandler {
     console.log(
       `${message.who.name} (#${message.who.id}) requested escape from cage${
         message.apiRequest ? " in json format" : ""
-      }.`
+      }.`,
     );
 
     await this._cagebot.testForThirdPartyUncaging();
@@ -48,7 +48,7 @@ export class UncageHandler {
     console.log(
       `${message.who.name} (#${message.who.id}) requested release from cage${
         message.apiRequest ? " in json format" : ""
-      }.`
+      }.`,
     );
 
     await this._cagebot.testForThirdPartyUncaging();
@@ -81,7 +81,7 @@ export class UncageHandler {
 
       if (prevStatus && prevStatus.requester.id !== message.who.id) {
         console.log(
-          `Reporting release to original requester ${prevStatus.requester.name} (#${prevStatus.requester.id}).`
+          `Reporting release to original requester ${prevStatus.requester.name} (#${prevStatus.requester.id}).`,
         );
 
         if (prevStatus.apiResponses) {
@@ -91,7 +91,7 @@ export class UncageHandler {
             .getClient()
             .sendPrivateMessage(
               prevStatus.requester,
-              `I chewed out of the Hobopolis instance in ${prevStatus.clan.name} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`
+              `I chewed out of the Hobopolis instance in ${prevStatus.clan.name} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`,
             );
         }
       }

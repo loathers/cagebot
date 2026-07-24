@@ -81,7 +81,7 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
   }
 
   settings.maintainAdventures = parseInt(
-    process.env["maintainAdventures"] || settings.maintainAdventures || "100"
+    process.env["maintainAdventures"] || settings.maintainAdventures || "100",
   );
   settings.delayBetweenClanRepeats = parseInt(settings.delayBetweenClanRepeats || "3600");
 

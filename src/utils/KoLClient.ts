@@ -1,10 +1,5 @@
-import axios from "axios";
-import { select } from "xpath";
-import { DOMParser as dom } from "xmldom";
-import { Agent as httpsAgent } from "https";
-import { Agent as httpAgent } from "http";
+import axios, { AxiosInstance } from "axios";
 import {
-  KOLCredentials,
   KoLUser,
   KoLStatus,
   ChatMessage as ChatMessage,
@@ -14,30 +9,23 @@ import {
   ClanWhiteboard,
   CombatMacro,
   KoLEffect,
+  LoginResult,
+  OrganSize,
 } from "./Typings";
 import { RequestResponse } from "./JsonResponses";
 import { decode } from "html-entities";
 import { splitMessage, toJson } from "./Utils";
+import { HttpCookieAgent, HttpsCookieAgent } from "http-cookie-agent/http";
+import { CookieJar } from "tough-cookie";
 
-axios.defaults.timeout = 30000;
-axios.defaults.httpAgent = new httpAgent({ keepAlive: true });
-axios.defaults.httpsAgent = new httpsAgent({ keepAlive: true });
-
-const parser = new dom({
-  errorHandler: {
-    warning: () => {},
-    error: () => {},
-    fatalError: console.log,
-  },
-});
+const FOR_WHO = "Cagesitter (Maintained by Irrat @ https://github.com/loathers/cagebot)";
 
 export class KoLClient {
   private _loginParameters;
-  private _credentials?: KOLCredentials;
   private _lastFetchedMessages: string = "0";
   private _player?: KoLUser;
-  private _isRollover: boolean = false;
-  private _rolloverAt?: number;
+  private _axios: AxiosInstance;
+  private _pwd: string | undefined;
 
   constructor(username: string, password: string) {
     this._loginParameters = new URLSearchParams();
@@ -46,6 +34,16 @@ export class KoLClient {
     this._loginParameters.append("password", password);
     this._loginParameters.append("secure", "0");
     this._loginParameters.append("submitbutton", "Log In");
+
+    const jar = new CookieJar();
+
+    this._axios = axios.create({
+      timeout: 30000,
+      headers: { "User-Agent": FOR_WHO },
+      baseURL: "https://www.kingdomofloathing.com/",
+      httpAgent: new HttpCookieAgent({ cookies: { jar } }),
+      httpsAgent: new HttpsCookieAgent({ cookies: { jar } }),
+    });
   }
 
   getUsername() {
@@ -73,166 +71,105 @@ export class KoLClient {
     return skills;
   }
 
-  async getSecondsToRollover(): Promise<number> {
-    if (this._isRollover) {
-      return 0;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-
-    // If rollover has not been set, or it's claiming it's expired
-    if (this._rolloverAt == undefined || this._rolloverAt <= now) {
-      this._rolloverAt = undefined;
-
-      await this.loggedIn();
-    }
-
-    if (this._rolloverAt === undefined) {
-      return 0;
-    }
-
-    return this._rolloverAt - now;
+  setLoggedOut() {
+    this._pwd = undefined;
   }
 
-  async loggedIn(): Promise<boolean> {
-    if (!this._credentials || this._isRollover) return false;
+  isLoggedIn(): boolean {
+    return this._pwd !== undefined;
+  }
 
-    try {
-      const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
-        maxRedirects: 0,
-        withCredentials: true,
-        headers: {
-          cookie: this._credentials?.sessionCookies || "",
-        },
-        params: {
-          what: "status",
-          for: "Cagesitter (Maintained by Phillammon)",
-        },
-        validateStatus: (status) => status === 302 || status === 200,
-      });
+  async loginWithBackoff() {
+    let loginAttempts = 0;
 
-      if (apiResponse.status === 200) {
-        this._rolloverAt = parseInt(apiResponse.data["rollover"]);
-        return true;
+    while (true) {
+      loginAttempts++;
+      const result = await this.logIn();
+
+      if (result == "Success") {
+        console.log("Logged in.");
+        return;
       }
 
-      return false;
-    } catch {
-      console.log("Login check failed, returning false to be safe.");
-      return false;
+      let minutesToWait = 1;
+      let message: string;
+
+      switch (result) {
+        case "Bad Login":
+          // Could be wrong pass, could be immediately logged out, who knows.
+          // But we should back off exponentially.
+          minutesToWait = loginAttempts ^ 2;
+          message = `Bad login, will sleep ${minutesToWait} before trying again.`;
+          break;
+        case "Error":
+        case "Unknown":
+          // We should be backing off if we're encountering unknown errors
+          minutesToWait = loginAttempts;
+          message = `Unknown error, will sleep ${minutesToWait} before trying again.`;
+          break;
+        case "Maint":
+          minutesToWait = 1;
+          message = `Rollover in progress, will sleep ${minutesToWait} before trying again.`;
+          break;
+        default:
+          minutesToWait = 10;
+          message = `Unknown issue, will sleep ${minutesToWait} before trying again.`;
+          break;
+      }
+
+      await new Promise((res) => setTimeout(res, minutesToWait * 60_000));
     }
   }
 
-  async logIn(): Promise<boolean> {
-    if (await this.loggedIn()) return true;
-
-    this._credentials = undefined;
-
-    try {
-      this._isRollover = /The system is currently down for nightly maintenance/.test(
-        (await axios("https://www.kingdomofloathing.com/")).data
-      );
-
-      if (this._isRollover) {
-        console.log("Rollover appears to be in progress. Checking again in one minute.");
-      }
-    } catch {
-      this._isRollover = true;
-      console.log("Login failed.. Rollover? Checking again in one minute.");
-    }
-
-    if (this._isRollover) {
-      setTimeout(() => this.logIn(), 60000);
-      return false;
-    }
+  async logIn(): Promise<LoginResult> {
+    this._pwd = undefined;
 
     console.log(`Not logged in. Logging in as ${this._loginParameters.get("loginname")}`);
 
     try {
-      const loginResponse = await axios("https://www.kingdomofloathing.com/login.php", {
+      const loginResponse = await this._axios("login.php", {
         method: "POST",
         data: this._loginParameters,
-        maxRedirects: 0,
-        validateStatus: (status) => status === 302,
       });
-      const sessionCookies = loginResponse.headers["set-cookie"]
-        .map((cookie: string) => cookie.split(";")[0])
-        .join("; ");
-      const apiResponse = await axios("https://www.kingdomofloathing.com/api.php", {
-        withCredentials: true,
-        headers: {
-          cookie: sessionCookies,
-        },
-        params: {
-          what: "status",
-          for: "Cagesitter (Maintained by Phillammon)",
-        },
-      });
-      this._credentials = {
-        sessionCookies: sessionCookies,
-        pwdhash: apiResponse.data.pwd,
-      };
-      this._player = {
-        id: apiResponse.data.playerid,
-        name: apiResponse.data.name,
-      };
-      console.log("Login success.");
-      return true;
-    } catch {
-      console.log("Login failed..");
-      return false;
+
+      const location = loginResponse.headers.location || "";
+
+      if (location.includes("maint.php")) {
+        return "Maint";
+      }
+
+      if (location.includes("login.php")) {
+        return "Bad Login";
+      }
+
+      const status = await this.getStatus();
+
+      if (!status.pwd) {
+        return "Unknown";
+      }
+
+      return "Success";
+    } catch (e) {
+      console.error(e);
+      return "Error";
     }
   }
 
   async visitUrl(
     url: string,
     parameters: Record<string, any> = {},
-    pwd: Boolean = true,
-    data?: any
+    pwd: boolean = true,
+    data?: any,
   ): Promise<any> {
-    if (this._isRollover || (await this.getSecondsToRollover()) <= 1) {
-      return null;
-    }
-
     try {
-      const page = await axios(`https://www.kingdomofloathing.com/${url}`, {
+      const page = await this._axios(url, {
         method: "POST",
-        withCredentials: true,
-        headers: {
-          cookie: this._credentials?.sessionCookies || "",
-        },
         params: {
-          ...(pwd ? { pwd: this._credentials?.pwdhash } : {}),
+          ...(pwd && this._pwd ? { pwd: this._pwd } : {}),
           ...parameters,
         },
         data: data,
       });
-
-      if (page.headers["set-cookie"] && this._credentials != null) {
-        const cookies: any = {};
-
-        for (let [name, cookie] of this._credentials.sessionCookies
-          .split("; ")
-          .map((s) => s.split("="))) {
-          if (!cookie) {
-            continue;
-          }
-
-          cookies[name] = cookie;
-        }
-
-        const sessionCookies = page.headers["set-cookie"].map((cookie: string) =>
-          cookie.split(";")[0].trim().split("=")
-        );
-
-        for (let [name, cookie] of sessionCookies) {
-          cookies[name] = cookie;
-        }
-
-        this._credentials.sessionCookies = Object.entries(cookies)
-          .map(([key, value]) => `${key}=${value}`)
-          .join("; ");
-      }
 
       return page.data;
     } catch {
@@ -269,20 +206,20 @@ export class KoLClient {
 
   async equip(itemId: number): Promise<void> {
     await this.visitUrl(
-      `inv_equip.php?pwd=${this._credentials?.pwdhash}&which=2&action=equip&whichitem=${itemId}&ajax=1`
+      `inv_equip.php?pwd=${this._pwd}&which=2&action=equip&whichitem=${itemId}&ajax=1`,
     );
   }
 
   async castSkill(skill: number, amount: number = 1) {
     await this.visitUrl(
-      `runskillz.php?action=Skillz&whichskill=${skill}&targetplayer=${this._player?.id}&pwd=${this._credentials?.pwdhash}&quantity=${amount}&ajax=1`
+      `runskillz.php?action=Skillz&whichskill=${skill}&targetplayer=${this._player?.id}&pwd=${this._pwd}&quantity=${amount}&ajax=1`,
     );
   }
 
   async getStatus(): Promise<KoLStatus> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "status",
-      for: "Cagesitter (Maintained by Phillammon)",
+      for: FOR_WHO,
     });
 
     if (!apiResponse || !apiResponse["equipment"]) {
@@ -290,7 +227,7 @@ export class KoLClient {
         level: 1,
         adventures: 10,
         meat: 0,
-        drunk: 19,
+        drunk: 15,
         full: 14,
         hp: 1,
         mp: 1,
@@ -300,8 +237,19 @@ export class KoLClient {
         rollover: Date.now(),
         turnsPlayed: 0,
         effects: [],
+        pwd: undefined,
+        flag_config: {
+          fullnesscounter: "0",
+        },
       };
     }
+
+    this._player = {
+      id: apiResponse["playerid"],
+      name: apiResponse["name"],
+    };
+
+    this._pwd = apiResponse["pwd"];
 
     const equipment = new Map();
     const equips = apiResponse["equipment"];
@@ -315,7 +263,7 @@ export class KoLClient {
 
     if (apiResponse["effects"]) {
       for (const apiEffect of Object.values(apiResponse["effects"]) as string[][]) {
-        // description-UUID [Name, Duration, Shorthand ID, source, Effect ID]
+        // description-UUID[Name, Duration, Shorthand ID, source, Effect ID]
         const effect: KoLEffect = {
           name: apiEffect[0],
           duration: parseInt(apiEffect[1]),
@@ -345,18 +293,63 @@ export class KoLClient {
       rollover: parseInt(apiResponse["rollover"]),
       turnsPlayed: parseInt(apiResponse["turnsplayed"]) || 0,
       effects: effects,
+      pwd: apiResponse["pwd"],
+      flag_config: {
+        fullnesscounter: apiResponse["flag_config"]["fullnesscounter"] || "0",
+      },
     };
   }
 
-  isRollover(): boolean {
-    return this._isRollover;
+  async parseCharpaneForOrganCapacity(status: KoLStatus): Promise<OrganSize | undefined> {
+    // Only attempt when both would display
+    if (status.drunk <= 0 || status.full <= 0) {
+      return undefined;
+    }
+
+    // If fullness counter isn't turned on as per status, enable it
+    if (status.flag_config.fullnesscounter !== "1") {
+      await this.visitUrl(`account.php`, {
+        am: 1,
+        action: "flag_fullnesscounter",
+        value: 1,
+        ajax: 1,
+      });
+    }
+
+    const charpane = (await this.visitUrl(`charpane.php`)) as string;
+
+    if (!charpane) {
+      return undefined;
+    }
+
+    const organsMatch = charpane.match(
+      />(?:(\d+)\s*\/\s*(\d+))<.*?(?:>(\d+)\s*\/\s*(\d+)<)(?=.*hp\.gif)/,
+    );
+
+    if (!organsMatch || organsMatch.length != 5) {
+      console.log(`Unable to parse organ capacity, has there been some backend changes?`);
+      return undefined;
+    }
+
+    const currentFull = parseInt(organsMatch[1]);
+    const fullLimit = parseInt(organsMatch[2]);
+    const currentDrunk = parseInt(organsMatch[3]);
+    const drunkLimit = parseInt(organsMatch[4]);
+
+    // Attempt to validate it against the status
+
+    if (status.full != currentFull || status.drunk != currentDrunk) {
+      console.log(`Unable to parse organ capacity, has there been some backend changes?`);
+      return undefined;
+    }
+
+    return {
+      stomach: fullLimit,
+      liver: drunkLimit,
+    };
   }
 
   async fetchNewWhispers(): Promise<ChatMessage[]> {
-    if (this._isRollover || !(await this.logIn())) {
-      return [];
-    }
-
     const newChatMessagesResponse = await this.visitUrl("newchatmessages.php", {
       j: 1,
       lasttime: this._lastFetchedMessages,
@@ -369,7 +362,7 @@ export class KoLClient {
     const newWhispers: ChatMessage[] = newChatMessagesResponse["msgs"]
       .filter(
         (msg: KOLMessage) =>
-          msg["type"] === "private" || (msg["type"] === "public" && msg["channel"] === "hobopolis")
+          msg["type"] === "private" || (msg["type"] === "public" && msg["channel"] === "hobopolis"),
       )
       .map(
         (msg: KOLMessage) =>
@@ -391,7 +384,7 @@ export class KoLClient {
                 }
               }
             },
-          } as ChatMessage)
+          }) as ChatMessage,
       );
 
     newWhispers.forEach((message) => {
@@ -417,7 +410,7 @@ export class KoLClient {
     }
 
     const match = page.match(
-      />Leader:<\/td><td valign=top><b><a href="showplayer\.php\?who=(\d+)">/
+      />Leader:<\/td><td valign=top><b><a href="showplayer\.php\?who=(\d+)">/,
     );
 
     if (!match) {
@@ -435,7 +428,7 @@ export class KoLClient {
     }
 
     const match = members.match(
-      /href="showplayer\.php\?who=(\d+)">[^<]+?<\/a><font color=gray><b> \(inactive\)<\/b>/
+      /href="showplayer\.php\?who=(\d+)">[^<]+?<\/a><font color=gray><b> \(inactive\)<\/b>/,
     );
 
     if (!match) {
@@ -456,23 +449,24 @@ export class KoLClient {
   }
 
   async getWhitelists(): Promise<KoLClan[]> {
-    const clanRecuiterResponse = await this.visitUrl("clan_signup.php");
-    if (!clanRecuiterResponse) return [];
+    const clanRecuiterResponse = await this.visitUrl(`clan_signup.php?place=managewhitelists`);
 
-    const clanIds = select(
-      '//select[@name="whichclan"]/option/@value',
-      parser.parseFromString(clanRecuiterResponse, "text/xml")
-    ).map((s) => (s.toString().match(/\d+/) ?? ["0"])[0]);
+    if (!clanRecuiterResponse) {
+      return [];
+    }
 
-    const clanNames = select(
-      '//select[@name="whichclan"]/option/text()',
-      parser.parseFromString(clanRecuiterResponse, "text/xml")
-    );
+    const clans: KoLClan[] = [];
 
-    return clanNames.map((element, index) => ({
-      name: element.toString(),
-      id: clanIds[index].toString(),
-    }));
+    for (const [, clanId, clanName] of clanRecuiterResponse.matchAll(
+      /<a href=showclan\.php\?whichclan=(\d+) class=nounder><b>([^>]*?)<\/b>(?=.*>Apply to a Clan<\/b><\/td><\/tr>)/gm,
+    )) {
+      clans.push({
+        id: clanId,
+        name: clanName,
+      });
+    }
+
+    return clans;
   }
 
   async myClan(): Promise<string> {
@@ -481,7 +475,7 @@ export class KoLClient {
     });
 
     return ((myClanResponse as string).match(
-      /\<b\>\<a class=nounder href=\"showclan\.php\?whichclan=(\d+)/
+      /\<b\>\<a class=nounder href=\"showclan\.php\?whichclan=(\d+)/,
     ) ?? ["", ""])[1];
   }
 
@@ -501,7 +495,7 @@ export class KoLClient {
   async getInventory(): Promise<Map<number, number>> {
     const apiResponse = await this.visitUrl("api.php", {
       what: "inventory",
-      for: "Cagesitter (Maintained by Phillammon)",
+      for: FOR_WHO,
     });
 
     const map: Map<number, number> = new Map();
@@ -542,7 +536,7 @@ export class KoLClient {
       "account_combatmacros.php",
       {},
       false,
-      `macroid=${macro.id}&action=edit&what=Edit`
+      `macroid=${macro.id}&action=edit&what=Edit`,
     );
 
     if (!apiResponse) {
@@ -571,7 +565,7 @@ export class KoLClient {
 
   async getAutoAttackMacro(): Promise<CombatMacro | undefined> {
     const apiResponse = await this.visitUrl(
-      `account.php?action=loadtab&value=combat&pwd=${this._credentials?.pwdhash}`
+      `account.php?action=loadtab&value=combat&pwd=${this._pwd}`,
     );
 
     if (!apiResponse) {
@@ -580,7 +574,7 @@ export class KoLClient {
 
     // Will only match on a combat macro, not a skill
     const match = apiResponse.match(
-      /<option selected="selected" value="(\d+)">([^<]*?) \(Combat Macro\)<\/option>/
+      /<option selected="selected" value="(\d+)">([^<]*?) \(Combat Macro\)<\/option>/,
     );
 
     if (!match) {
@@ -595,11 +589,11 @@ export class KoLClient {
 
   async searchMall(itemName: string): Promise<MallResult[]> {
     const apiResponse = (await this.visitUrl(
-      `mall.php?justitems=0&pudnuggler="${encodeURI(itemName)}"`
+      `mall.php?justitems=0&pudnuggler="${encodeURI(itemName)}"`,
     )) as string;
 
     const matches = apiResponse.matchAll(
-      /href="mallstore\.php\?whichstore=(\d+)&searchitem=(\d+)&searchprice=(\d+)"><b>.+?"small stock">([\d,]+)<\/td>.*?<td class="small">(?:(\d+)&nbsp;\/&nbsp;day&nbsp;&nbsp;&nbsp;<\/td>)?/g
+      /href="mallstore\.php\?whichstore=(\d+)&searchitem=(\d+)&searchprice=(\d+)"><b>.+?"small stock">([\d,]+)<\/td>.*?<td class="small">(?:(\d+)&nbsp;\/&nbsp;day&nbsp;&nbsp;&nbsp;<\/td>)?/g,
     );
 
     let results: MallResult[] = [];
@@ -609,7 +603,7 @@ export class KoLClient {
       const itemId = parseInt(result[2]);
       const price = parseInt(result[3]);
       const stockLevel = parseInt(result[4].replaceAll(",", ""));
-      const limit = result[5] == null ? undefined : parseInt(result[5].replaceAll(",", ""));
+      const limit = result[5] ? undefined : parseInt(result[5].replaceAll(",", ""));
 
       results.push({
         storeId: storeId,
@@ -634,19 +628,19 @@ export class KoLClient {
     itemId = mallResult.itemId + itemId;
 
     await this.visitUrl(
-      `mallstore.php?buying=1&quantity=${amount}&whichitem=${itemId}&ajax=1&pwd=${this._credentials?.pwdhash}&whichstore=${mallResult.storeId}`
+      `mallstore.php?buying=1&quantity=${amount}&whichitem=${itemId}&ajax=1&pwd=${this._pwd}&whichstore=${mallResult.storeId}`,
     );
   }
 
   async buyFromNPC(shopName: string, row: number, amount: number): Promise<void> {
     await this.visitUrl(
-      `shop.php?whichshop=${shopName}&action=buyitem&quantity=${amount}&whichrow=${row}&pwd=${this._credentials?.pwdhash}`
+      `shop.php?whichshop=${shopName}&action=buyitem&quantity=${amount}&whichrow=${row}&pwd=${this._pwd}`,
     );
   }
 
   async multiUse(item: number, amount: number): Promise<void> {
     await this.visitUrl(
-      `multiuse.php?whichitem=${item}&action=useitem&ajax=1&quantity=${amount}&pwd=${this._credentials?.pwdhash}`
+      `multiuse.php?whichitem=${item}&action=useitem&ajax=1&quantity=${amount}&pwd=${this._pwd}`,
     );
   }
 
@@ -675,7 +669,7 @@ export class KoLClient {
 
     let editable = true;
     let match = response.match(
-      /<textarea maxlength=5000 name=whiteboard rows=15 cols=60>(.*?)<\/textarea><br>/s
+      /<textarea maxlength=5000 name=whiteboard rows=15 cols=60>(.*?)<\/textarea><br>/s,
     );
     let text: string = "";
 

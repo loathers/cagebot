@@ -14,6 +14,19 @@ import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
 const savedFileName: string = "./data/runtime_state.json";
+const secondsInDay = 24 * 60 * 60;
+const originalRollover = 1044847800;
+
+export function getSecondsToRollover() {
+  return secondsInDay - getSecondsElapsedInDay();
+}
+
+export function getSecondsElapsedInDay(time: number = Math.round(Date.now() / 1000)) {
+  const secondsSinceOriginalTime = time - originalRollover;
+  const secondsElapsedInDay = secondsSinceOriginalTime % secondsInDay;
+
+  return secondsElapsedInDay;
+}
 
 export function humanReadableTime(seconds: number): string {
   return `${Math.floor(seconds / 3600)}:${Math.floor((seconds % 3600) / 60)
@@ -70,26 +83,28 @@ export function createApiResponse(status: RequestStatus, details: RequestStatusD
 export async function sendApiResponse(
   message: ChatMessage,
   status: RequestStatus,
-  details: RequestStatusDetails
+  details: RequestStatusDetails,
 ) {
   message.reply(createApiResponse(status, details));
 }
 
 export function saveSettings(
   turnsPlayed: number,
-  maxDrunk: number,
+  maxDrunk: number | undefined,
+  maxFull: number | undefined,
   knownSkills: KoLSkill[],
-  task?: CageTask
+  task?: CageTask,
 ) {
   writeFileSync(
     savedFileName,
     JSON.stringify({
       validAtTurn: turnsPlayed,
       maxDrunk: maxDrunk,
+      ...(maxFull !== undefined ? { maxFull: maxFull } : {}),
       cageTask: task,
       knownSkills: knownSkills.map((skill) => skill.skillId),
     } as SavedSettings),
-    "utf-8"
+    "utf-8",
   );
 }
 
@@ -105,7 +120,8 @@ export function loadSettings(): SavedSettings | undefined {
 
     const settings: SavedSettings = {
       validAtTurn: parseInt(json["validAtTurn"]),
-      maxDrunk: parseInt(json["maxDrunk"]),
+      maxDrunk: json["maxDrunk"] !== undefined ? parseInt(json["maxDrunk"]) : undefined,
+      maxFull: json["maxFull"] !== undefined ? parseInt(json["maxFull"]) : undefined,
       knownSkills: ((json["knownSkills"] ?? []) as string[]).map((s) => parseInt(s)),
     };
 
@@ -193,7 +209,7 @@ export async function readGratesAndValves(client: KoLClient): Promise<[number, n
   const raidlogsResponse = (await client.visitUrl("clan_raidlogs.php")) as string;
   const regexGrates =
     raidlogsResponse.matchAll(
-      /opened (?:a|(?:\d+)) sewer grates? (?:\d+ times )?\((\d+) turns?\)/g
+      /opened (?:a|(?:\d+)) sewer grates? (?:\d+ times )?\((\d+) turns?\)/g,
     ) || [];
   const regexValves =
     raidlogsResponse.matchAll(/lowered the water level (?:\d+ times )?\((\d+) turns?\)/g) || [];

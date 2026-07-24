@@ -34,7 +34,7 @@ export type StatusResponse = {
   type: "status";
   advs: number; // Adventures remaining
   full: number; // Current fullness used
-  maxFull: number; // Max fullness, absent if we don't know
+  maxFull?: number; // Max fullness, absent if we don't know
   drunk: number; // Current liver used
   maxDrunk?: number; // Max liver, absent if we don't know for sure. Best assumed 14.
   caged: boolean; // Just so you can parse it quickly without checking the 'status'
