@@ -1,16 +1,18 @@
-import { ExploredResponse } from "../utils/JsonResponses";
-import { CageBot } from "../CageBot";
-import { KoLClient } from "../utils/KoLClient";
-import { Settings, ChatMessage, KoLClan, KoLSkill, KoLStatus, BuffySkill } from "../utils/Typings";
+import type { Client } from "kol.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import { Effects } from "kol.js/domains/Effects";
+import { ExploredResponse } from "../utils/JsonResponses.js";
+import { CageBot } from "../CageBot.js";
+import { Settings, ChatMessage, KoLClan, KoLSkill, BuffySkill } from "../utils/Typings.js";
 import {
   sendApiResponse,
   humanReadableTime,
-  readGratesAndValves,
   updateWhiteboard,
   toJson,
   getBuffySkills,
-  getMinusCombatSkills,
-} from "../utils/Utils";
+  sendPrivateMessage,
+  useChatMacro,
+} from "../utils/Utils.js";
 
 export class CagingHandler {
   private _cagebot: CageBot;
@@ -20,7 +22,7 @@ export class CagingHandler {
     this._cagebot = cagebot;
   }
 
-  getClient(): KoLClient {
+  getClient(): Client {
     return this._cagebot.getClient();
   }
 
@@ -28,7 +30,7 @@ export class CagingHandler {
     return this._cagebot.getSettings();
   }
 
-  async runBuffyRequest(status: KoLStatus) {
+  async runBuffyRequest(status: ApiStatus) {
     // We request from buffy only once every 24 hours, because buffy should always be sending us enough buffs for multiple days
     if (this._lastBuffyRequest > Date.now()) {
       return;
@@ -38,13 +40,14 @@ export class CagingHandler {
     this._lastBuffyRequest = Date.now() + 24 * 60 * 60 * 1000;
 
     // Find all effects that buffy can give us
+    const effects = Effects.parseEntries(status);
     const wantBuffy: BuffySkill[] = getBuffySkills().filter(
-      (s) => status.effects.find((e) => e.id === s.effectId && e.duration > 50) == null
+      (s) => effects.find((e) => e.id === s.effectId && e.duration > 50) == null
     );
 
     for (const buffySkill of wantBuffy) {
       console.log(`Requesting 500 turns of ${buffySkill.name} from Buffy`);
-      await this.getClient().useChatMacro("/w Buffy 500 " + buffySkill.name);
+      await useChatMacro(this.getClient(), "/w Buffy 500 " + buffySkill.name);
     }
   }
 
@@ -56,14 +59,16 @@ export class CagingHandler {
    *
    * @returns True if we should avoid calling again
    */
-  async castAndMaintainEffects(status: KoLStatus): Promise<boolean> {
+  async castAndMaintainEffects(status: ApiStatus): Promise<boolean> {
     await this.runBuffyRequest(status);
+
+    const effects = Effects.parseEntries(status);
 
     // Given we care less about evenly distributing skills as it should naturally balance with time..
     // Just find the first skill with not enough turns in the effect remaining.
     const wantToCast: KoLSkill | undefined = this._cagebot
       .getKnownSkills()
-      .find((s) => status.effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
+      .find((s) => effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
 
     // If there is no skills we need to cast, return true
     if (!wantToCast) {
@@ -76,7 +81,10 @@ export class CagingHandler {
 
     if (timesToCast >= 1) {
       console.log(`Casting ${wantToCast.name} x ${timesToCast}`);
-      await this.getClient().castSkill(wantToCast.skillId, timesToCast);
+      await this.getClient().skills.cast(wantToCast.skillId, {
+        count: timesToCast,
+        target: this.getClient().playerId,
+      });
     }
 
     return false;
@@ -91,14 +99,15 @@ export class CagingHandler {
 
     await this._cagebot.testForThirdPartyUncaging();
 
-    const timeToRollover = await this.getClient().getSecondsToRollover();
+    const timeToRollover = await this.getClient().secondsToRollover();
 
     // If rollover is less than 7 minutes away
     if (timeToRollover < 7 * 60) {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "rollover");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `Rollover is in ${humanReadableTime(
             timeToRollover
@@ -115,7 +124,8 @@ export class CagingHandler {
       if (message.apiRequest) {
         sendApiResponse(message, "Error", "invalid_clan");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           "Please provide the name of a clan I am whitelisted in."
         );
@@ -139,7 +149,7 @@ export class CagingHandler {
       return;
     }
 
-    const whitelists = (await this.getClient().getWhitelists()).filter((clan: KoLClan) =>
+    const whitelists = (await this.getClient().getClanWhitelists()).filter((clan: KoLClan) =>
       clan.name.toLowerCase().includes(clanName.toLowerCase())
     );
 
@@ -153,7 +163,8 @@ export class CagingHandler {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "clan_ambiguous");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `I'm in multiple clans named ${clanName}: ${whitelists
             .map((c) => c.name)
@@ -170,7 +181,8 @@ export class CagingHandler {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "not_whitelisted");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `I'm not in any clans named ${clanName}. Check your spelling, or ensure I have a whitelist.`
         );
@@ -212,7 +224,8 @@ export class CagingHandler {
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "unsuccessful_whitelist");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
         );
@@ -223,13 +236,14 @@ export class CagingHandler {
       console.log(`Successfully whitelisted to clan ${targetClan.name}`);
     }
 
-    if (!/Old Sewers/.test(await this.getClient().visitUrl("clan_hobopolis.php"))) {
+    if (!(await this._cagebot.getHobopolis().sewersOpen())) {
       console.log(`Sewers in clan "${targetClan.name}" inaccessible, aborting.`);
 
       if (message.apiRequest) {
         await sendApiResponse(message, "Error", "no_hobo_access");
       } else {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `I can't seem to access the sewers in ${targetClan.name}. Is Hobopolis open? Do I have the right permissions?`
         );
@@ -242,26 +256,24 @@ export class CagingHandler {
   }
 
   async attemptClanSwitch(targetClan: KoLClan): Promise<boolean> {
-    await this.getClient().joinClan(targetClan);
+    const join = await this.getClient().joinClan(targetClan.id);
 
-    if ((await this.getClient().myClan()) === targetClan.id) {
+    if (join.success) {
       return true;
     }
 
     console.log(
-      `Whitelisting to clan "${targetClan.name}" failed, checking if we can transfer leadership.`
+      `Whitelisting to clan "${targetClan.name}" failed (${join.reason}), checking if we can transfer leadership.`
     );
 
-    const currentClanLeader = await this.getClient().getClanLeader(await this.getClient().myClan());
-
-    if (!currentClanLeader || currentClanLeader !== this.getClient().getMe()?.id) {
-      console.log(`We do not appear to have leadership of the clan ${targetClan.name}.`);
+    // Joining a clan only fails with this reason when we lead our current one
+    if (join.reason !== "Already leader of a clan") {
+      console.log(`We do not appear to have leadership of our current clan.`);
 
       return false;
     }
 
-    // If we fetched the current clan leader, and we are the leader
-    const inactiveMember = await this.getClient().getInactiveMember();
+    const inactiveMember = await this._cagebot.getClan().getInactiveMember();
 
     // If we found an inactive clan member
     if (!inactiveMember) {
@@ -271,7 +283,9 @@ export class CagingHandler {
 
     console.log(`Now attempting to transfer clan leadership to inactive member ${inactiveMember}`);
     // If clan leadership transfer was successful
-    const switchedLeadership = await this.getClient().transferClanLeadership(inactiveMember);
+    const switchedLeadership = (
+      await this._cagebot.getClan().transferLeadership(inactiveMember)
+    ).success;
 
     console.log(`Clan leadership transfer was ${switchedLeadership ? "" : "un"}successfully`);
 
@@ -280,13 +294,12 @@ export class CagingHandler {
     }
 
     // If clan leadership transfer was successful
-    await this.getClient().joinClan(targetClan);
-
-    return (await this.getClient().myClan()) === targetClan.id;
+    return (await this.getClient().joinClan(targetClan.id)).success;
   }
 
   async attemptCage(message: ChatMessage, targetClan: KoLClan): Promise<void> {
     const autoEscapeMessage = this.getSettings().whiteboardMessageAutoEscape;
+    const hobopolis = this._cagebot.getHobopolis();
 
     this._cagebot.setCagedStatus(false, {
       clan: targetClan,
@@ -295,21 +308,20 @@ export class CagingHandler {
       apiResponses: message.apiRequest,
       autoRelease:
         autoEscapeMessage &&
-        (await this._cagebot.getClient().getClanWhiteboard()).text.includes(autoEscapeMessage)
+        (await this._cagebot.getClan().readWhiteboard()).text.includes(autoEscapeMessage)
           ? true
           : false,
     });
 
-    await this.getClient().useChatMacro("/listenon Hobopolis");
-    let status = await this.getClient().getStatus();
+    await useChatMacro(this.getClient(), "/listenon Hobopolis");
+    let status = await this.getClient().fetchStatus();
     let maintainEffects: boolean = await this.castAndMaintainEffects(status);
 
     let gratesOpened = 0;
     let valvesTwisted = 0;
     let timesChewedOut = 0;
-    const [gratesFoundOpen, valvesFoundTwisted]: [number, number] = await readGratesAndValves(
-      this.getClient()
-    );
+    const { grates: gratesFoundOpen, valves: valvesFoundTwisted } =
+      await hobopolis.getSewerProgress();
     let currentAdventures = status.adventures;
     let currentDrunk: number = status.drunk;
     let estimatedTurnsSpent: number = 0;
@@ -326,7 +338,8 @@ export class CagingHandler {
     if (message.apiRequest) {
       await sendApiResponse(message, "Accepted", "doing_cage");
     } else {
-      await this.getClient().sendPrivateMessage(
+      await sendPrivateMessage(
+        this.getClient(),
         message.who,
         `Attempting to get caged in ${targetClan.name}.`
       );
@@ -335,23 +348,23 @@ export class CagingHandler {
     console.log(`Beginning turns in ${targetClan.name} sewers.`);
     let caged = this._cagebot.isCaged();
     let lastAdventuresCheck = 0;
-    let lastAdventuresCount = status.turnsPlayed;
+    let lastAdventuresCount = status.turnsplayed;
 
     const turnsSpentSinceLastCheck: () => number = () => {
       return totalTurnsSpent + estimatedTurnsSpent - lastAdventuresCheck;
     };
 
     const adventuringNormally: () => Promise<boolean> = async () => {
-      status = await this.getClient().getStatus();
+      status = await this.getClient().fetchStatus();
 
       // If we thought we had burned adventures, but we had more adventures than expected.
-      if (lastAdventuresCount == status.turnsPlayed && turnsSpentSinceLastCheck() > 3) {
+      if (lastAdventuresCount == status.turnsplayed && turnsSpentSinceLastCheck() > 3) {
         errorReason = `Expected to have burned through adventures, but none were consumed.`;
         return false;
       }
 
       lastAdventuresCheck = estimatedTurnsSpent + totalTurnsSpent;
-      lastAdventuresCount = status.turnsPlayed;
+      lastAdventuresCount = status.turnsplayed;
 
       return true;
     };
@@ -409,95 +422,69 @@ export class CagingHandler {
 
       estimatedTurnsSpent += 1;
 
-      const adventureResponse = await this.getClient().visitUrl("adventure.php", {
-        snarfblat: 166,
-      });
+      const encounter = await hobopolis.exploreSewer();
 
-      if (/Despite All Your Rage/.test(adventureResponse)) {
+      if (encounter.type === "cage") {
         estimatedTurnsSpent--;
         caged = true;
 
         // Here we simply choose a choice, which I believe adds our caging to the clan logs which isn't really noteworthy.
-        await this.getClient().visitUrl("choice.php", {
-          whichchoice: 211,
-          option: 2,
-        });
+        await hobopolis.acceptCage();
 
         console.log(`Caged!`);
-      } else if (/Disgustin\' Junction/.test(adventureResponse)) {
-        const choiceResponse = await this.getClient().visitUrl("choice.php", {
-          whichchoice: 198,
-          option: 3,
-        });
+      } else if (encounter.type === "junction") {
+        const { opened } = await hobopolis.openGrate();
 
-        if (/too tired to explore the tunnel on the other side/i.test(choiceResponse)) {
+        if (opened) {
           gratesOpened += 1;
           console.log(`Opened grate. Grate(s) so far: ${gratesOpened}.`);
         } else {
           estimatedTurnsSpent--; // Free turn
         }
-      } else if (/Somewhat Higher and Mostly Dry/.test(adventureResponse)) {
-        const choiceResponse = await this.getClient().visitUrl("choice.php", {
-          whichchoice: 197,
-          option: 3,
-        });
+      } else if (encounter.type === "higherAndDry") {
+        const { twisted } = await hobopolis.twistValve();
 
-        if (/as the water level in the sewer lowers by a couple of inches/i.test(choiceResponse)) {
+        if (twisted) {
           valvesTwisted += 1;
           console.log(`Opened valve. Valve(s) so far: ${valvesTwisted}.`);
         } else {
           estimatedTurnsSpent--; // Free turn
         }
-      } else if (/The Former or the Ladder/.test(adventureResponse)) {
+      } else if (encounter.type === "ladder") {
         // Funny enough, this is not a free turn. But we're going to try once to release any trapped clanmates.
+        if (triedToRescue) {
+          await hobopolis.fightChum();
+        } else {
+          // Always set this to true so follow up encounters to this NC will result in a fight.
+          triedToRescue = true;
 
-        // 2 = Fight a C. H. U. M.
-        // 3 = Rescue
-        const option = triedToRescue ? 2 : 3;
-        // Always set this to true so follow up encounters to this NC will result in a fight.
-        triedToRescue = true;
+          const { cageOccupied } = await hobopolis.rescueClanmate();
 
-        const cagePage = await this.getClient().visitUrl("choice.php", {
-          whichchoice: 199,
-          option: option,
-        });
+          if (cageOccupied) {
+            console.log(
+              `Someone is already in the C.H.U.M. Cage! As we can't be caged, performing an early exit.`
+            );
+            errorReason = `Sewer cage is already occupied, cannot be caged.`;
+            // Set the delay incase this was intentional
+            //this._cagebot.addClanCooldown(message.who, targetClan);
 
-        if (
-          option == 3 &&
-          !/You stare at it for 4 minutes and 33 seconds before getting bored and climbing back out of the sewer/.test(
-            cagePage
-          )
-        ) {
-          console.log(
-            `Someone is already in the C.H.U.M. Cage! As we can't be caged, performing an early exit.`
-          );
-          errorReason = `Sewer cage is already occupied, cannot be caged.`;
-          // Set the delay incase this was intentional
-          //this._cagebot.addClanCooldown(message.who, targetClan);
-
-          break;
+            break;
+          }
         }
-      } else if (/Pop!/.test(adventureResponse)) {
+      } else if (encounter.type === "gnawedCage") {
         estimatedTurnsSpent--; // Free turn
 
-        await this.getClient().visitUrl("choice.php", {
-          whichchoice: 296,
-          option: 1,
-        });
-      } else if (/You shouldn't be here./.test(adventureResponse)) {
+        await hobopolis.squeezeOut();
+      } else if (encounter.type === "hodgmanDefeated") {
         console.log(`Looks like Hodgeman has been defeated!`);
         errorReason = `Hodgeman has been defeated and sewers are unavailable.`;
         break;
-      } else if (
-        /You've already found your way through these sewers, and you don't feel like spending any more time down there than you absolutely have to./.test(
-          adventureResponse
-        )
-      ) {
+      } else if (encounter.type === "passedThrough") {
         errorReason = `Passed through sewers and can no longer adventure there.`;
         break;
       }
 
-      if (!caged && /whichchoice/.test(await this.getClient().visitUrl("place.php"))) {
+      if (!caged && (await hobopolis.stuckInChoice())) {
         console.log(`Unexpectedly still in a choice after running possible choices. Aborting.`);
 
         break;
@@ -528,7 +515,7 @@ export class CagingHandler {
           toSend += ' Release me later by whispering "escape" to me.';
         }
 
-        await this.getClient().sendPrivateMessage(message.who, toSend);
+        await sendPrivateMessage(this.getClient(), message.who, toSend);
       }
 
       await this._cagebot.saveSettings();
@@ -543,7 +530,8 @@ export class CagingHandler {
 
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
-          await this.getClient().sendPrivateMessage(
+          await sendPrivateMessage(
+            this.getClient(),
             message.who,
             `I ran out of adventures trying to get caged in ${targetClan.name}.`
           );
@@ -555,7 +543,8 @@ export class CagingHandler {
 
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
-          await this.getClient().sendPrivateMessage(
+          await sendPrivateMessage(
+            this.getClient(),
             message.who,
             `Failed to be caged in ${targetClan.name}, ${errorReason}`
           );
@@ -567,7 +556,8 @@ export class CagingHandler {
 
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
-          await this.getClient().sendPrivateMessage(
+          await sendPrivateMessage(
+            this.getClient(),
             message.who,
             `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
           );
@@ -577,7 +567,7 @@ export class CagingHandler {
       await updateWhiteboard(this._cagebot, this._cagebot.isCaged());
     }
 
-    const endAdvs = (await this.getClient().getStatus()).adventures;
+    const endAdvs = (await this.getClient().fetchStatus()).adventures;
     const spentAdvs = totalTurnsSpent + (currentAdventures - endAdvs);
 
     if (estimatedTurnsSpent + totalTurnsSpent != spentAdvs) {
@@ -607,9 +597,10 @@ export class CagingHandler {
         chews: timesChewedOut,
       };
 
-      await this.getClient().sendPrivateMessage(message.who, toJson(hoboStatus));
+      await sendPrivateMessage(this.getClient(), message.who, toJson(hoboStatus));
     } else {
-      await this.getClient().sendPrivateMessage(
+      await sendPrivateMessage(
+        this.getClient(),
         message.who,
         `I opened ${gratesOpened} grate${
           gratesOpened === 1 ? "" : "s"
@@ -619,7 +610,8 @@ export class CagingHandler {
       );
 
       if (gratesOpened > 0 || valvesTwisted > 0) {
-        await this.getClient().sendPrivateMessage(
+        await sendPrivateMessage(
+          this.getClient(),
           message.who,
           `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
             valvesTwisted + valvesFoundTwisted

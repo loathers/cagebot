@@ -1,8 +1,16 @@
-import { DietResponse } from "../utils/JsonResponses";
-import { CageBot } from "../CageBot";
-import { KoLClient } from "../utils/KoLClient";
-import { Diet, Settings, ChatMessage, KoLStatus } from "../utils/Typings";
-import { getLilBarrelDiet, getManualDiet, sendApiResponse, toJson } from "../utils/Utils";
+import type { Client } from "kol.js";
+import { DietResponse } from "../utils/JsonResponses.js";
+import { CageBot } from "../CageBot.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import { Diet, Settings, ChatMessage } from "../utils/Typings.js";
+import {
+  getInventory,
+  getLilBarrelDiet,
+  getManualDiet,
+  sendApiResponse,
+  sendPrivateMessage,
+  toJson,
+} from "../utils/Utils.js";
 
 export class DietHandler {
   private _diet?: Diet[];
@@ -15,7 +23,7 @@ export class DietHandler {
     this._cagebot = cagebot;
   }
 
-  getClient(): KoLClient {
+  getClient(): Client {
     return this._cagebot.getClient();
   }
 
@@ -33,8 +41,10 @@ export class DietHandler {
 
   async doSetup() {
     if (!this._cagebot.isCaged() && !this._maxDrunk) {
+      const skills = await this.getClient().charSheet.getSkills();
+
       // Liver of steel is Skill ID #1
-      if ((await this.getClient().getSkills()).includes(1)) {
+      if ([...skills.keys()].some((skill) => skill.id === 1)) {
         this._maxDrunk = 19;
       } else {
         this._maxDrunk = 14;
@@ -45,12 +55,12 @@ export class DietHandler {
       return;
     }
 
-    const status = await this.getClient().getStatus();
+    const status = await this.getClient().fetchStatus();
 
     this._ownsTuxedo =
-      (await this.getClient().getInventory()).has(2489) || status?.equipment.get("shirt") == 2489;
+      (await getInventory(this.getClient())).has(2489) || status.equipment?.shirt === 2489;
 
-    this._usingBarrelMimic = status?.familiar == 198;
+    this._usingBarrelMimic = status.familiar === 198;
 
     if (this._usingBarrelMimic) {
       this._diet = getLilBarrelDiet();
@@ -66,7 +76,7 @@ export class DietHandler {
       return;
     }
 
-    const inv: Map<number, number> = await this.getClient().getInventory();
+    const inv: Map<number, number> = await getInventory(this.getClient());
 
     // Sort our diet so that the best foods and drinks that are available are pushed to the very top.
     // This is so we can try even the spread of our consumed items between drink and food.
@@ -84,7 +94,7 @@ export class DietHandler {
   }
 
   async maintainAdventures(message?: ChatMessage): Promise<number> {
-    const status = await this.getClient().getStatus();
+    const status = await this.getClient().fetchStatus();
     const beforeAdv = status.adventures;
 
     if (beforeAdv > this.getSettings().maintainAdventures) {
@@ -102,7 +112,7 @@ export class DietHandler {
     }
 
     const currentLevel = status.level;
-    const inventory: Map<number, number> = await this.getClient().getInventory();
+    const inventory: Map<number, number> = await getInventory(this.getClient());
     let itemConsumed;
     let itemsMissing: string[] = [];
     let itemIdsMissing: string[] = [];
@@ -128,24 +138,24 @@ export class DietHandler {
 
       if (diet.type == "food") {
         console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
-        consumeMessage = await this.getClient().eat(diet.id);
+        consumeMessage = await this.getClient().consumption.eat(diet.id);
       } else {
         console.log(`Attempting to drink ${diet.name}, of which we have ${inventory.get(diet.id)}`);
 
         if (this._usingBarrelMimic && this._ownsTuxedo) {
-          const priorShirt = status.equipment.get("shirt") || 0;
+          const priorShirt = status.equipment?.shirt || 0;
 
           if (priorShirt != 2489) {
-            await this.getClient().equip(2489);
+            await this.getClient().equipment.equip(2489);
           }
 
-          consumeMessage = this.getClient().drink(diet.id);
+          consumeMessage = await this.getClient().consumption.drink(diet.id);
 
           if (priorShirt > 0 && priorShirt != 2489) {
-            await this.getClient().equip(priorShirt);
+            await this.getClient().equipment.equip(priorShirt);
           }
         } else {
-          consumeMessage = await this.getClient().drink(diet.id);
+          consumeMessage = await this.getClient().consumption.drink(diet.id);
         }
       }
 
@@ -157,7 +167,7 @@ export class DietHandler {
       return beforeAdv;
     }
 
-    const afterAdv = (await this.getClient().getStatus()).adventures;
+    const afterAdv = (await this.getClient().fetchStatus()).adventures;
 
     if (beforeAdv === afterAdv) {
       if (itemConsumed) {
@@ -185,7 +195,8 @@ export class DietHandler {
               `lack_edibles:${itemIdsMissing.join(",")}` as any
             );
           } else {
-            await this.getClient().sendPrivateMessage(
+            await sendPrivateMessage(
+              this.getClient(),
               message.who,
               `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
             );
@@ -223,7 +234,7 @@ export class DietHandler {
     const dietStatus = await this.getDietStatus();
 
     if (message.apiRequest) {
-      await this.getClient().sendPrivateMessage(message.who, toJson(dietStatus));
+      await sendPrivateMessage(this.getClient(), message.who, toJson(dietStatus));
     } else {
       await message.reply(
         `My remaining diet today has an expected outcome of ${dietStatus.possibleAdvsToday} adventures.`
@@ -240,8 +251,8 @@ export class DietHandler {
   }
 
   async getDietStatus(): Promise<DietResponse> {
-    const inventory: Map<number, number> = await this.getClient().getInventory();
-    const status = await this.getClient().getStatus();
+    const inventory: Map<number, number> = await getInventory(this.getClient());
+    const status = await this.getClient().fetchStatus();
     const level = status.level;
     let food: number = 0;
     let drink: number = 0;
@@ -311,7 +322,7 @@ export class DietHandler {
     }
   }
 
-  getPossibleAdventuresFromDiet(status: KoLStatus, inv: Map<number, number>): number {
+  getPossibleAdventuresFromDiet(status: ApiStatus, inv: Map<number, number>): number {
     if (!this._diet) {
       return 0;
     }

@@ -6,11 +6,6 @@ export type CageTask = {
   autoRelease: boolean;
 };
 
-export type ClanWhiteboard = {
-  text: string;
-  editable: boolean;
-};
-
 export type SavedSettings = {
   validAtTurn: number;
   maxDrunk: number;
@@ -42,23 +37,9 @@ export type LastClanRequest = {
   expiresAfter: number;
 };
 
-export type KOLCredentials = {
-  sessionCookies: string;
-  pwdhash: string;
-};
-
 export type KoLUser = {
   name: string;
-  id: string;
-};
-
-export type KOLMessage = {
-  who?: KoLUser;
-  type?: string;
-  msg?: string;
-  link?: string;
-  channel: string;
-  time: string;
+  id: number;
 };
 
 export type ChatMessage = {
@@ -71,54 +52,6 @@ export type ChatMessage = {
 
 export type KoLClan = {
   name: string;
-  id: string;
-};
-
-export type CombatMacro = {
-  name: string;
-  id: string;
-};
-
-export type MallResult = {
-  storeId: number;
-  itemId: number;
-  stock: number;
-  limit?: number;
-  price: number;
-};
-
-export type EquipSlot =
-  | "hat"
-  | "shirt"
-  | "pants"
-  | "weapon"
-  | "offhand"
-  | "acc1"
-  | "acc2"
-  | "acc3"
-  | "fakehands"
-  | "cardsleeve";
-
-export type KoLStatus = {
-  turnsPlayed: number;
-  adventures: number;
-  full: number;
-  drunk: number;
-  rollover: number;
-  hp: number;
-  mp: number;
-  maxHP: number;
-  maxMP: number;
-  equipment: Map<EquipSlot, number>;
-  familiar?: number;
-  meat: number;
-  level: number;
-  effects: KoLEffect[];
-};
-
-export type KoLEffect = {
-  name: string;
-  duration: number;
   id: number;
 };
 
