@@ -1,6 +1,7 @@
 import { type Client, gameData } from "kol.js";
 import type { ApiStatus } from "kol.js/domains/ApiStatus";
 import type { Item } from "data-of-loathing";
+import { decode } from "html-entities";
 import { DietResponse } from "../utils/JsonResponses.js";
 import { CageBot } from "../CageBot.js";
 import { Settings, ChatMessage } from "../utils/Typings.js";
@@ -60,6 +61,11 @@ export class DietHandler {
   // Floor the average yield to stay on the conservative side.
   private estAdvsOf(item: Item): number {
     return Math.floor(item.consumable!.adventures);
+  }
+
+  // Game data item names are HTML-encoded; decode for display.
+  private nameOf(item: Item): string {
+    return decode(item.name);
   }
 
   async doSetup() {
@@ -153,16 +159,16 @@ export class DietHandler {
       hasStomachSpace = true;
 
       if ((inventory.get(item) || 0) <= 0) {
-        itemsMissing.push(item.name);
+        itemsMissing.push(this.nameOf(item));
         itemIdsMissing.push(item.id.toString());
         continue;
       }
 
       if (isFood) {
-        console.log(`Attempting to eat ${item.name}, of which we have ${inventory.get(item)}`);
+        console.log(`Attempting to eat ${this.nameOf(item)}, of which we have ${inventory.get(item)}`);
         consumeMessage = await this.client.consumption.eat(item);
       } else {
-        console.log(`Attempting to drink ${item.name}, of which we have ${inventory.get(item)}`);
+        console.log(`Attempting to drink ${this.nameOf(item)}, of which we have ${inventory.get(item)}`);
 
         if (this._usingBarrelMimic && this._ownsTuxedo) {
           const priorShirt = status.equipment?.shirt || 0;
@@ -181,7 +187,7 @@ export class DietHandler {
         }
       }
 
-      itemConsumed = item.name;
+      itemConsumed = this.nameOf(item);
       break;
     }
 
@@ -320,7 +326,7 @@ export class DietHandler {
 
       const diet = this._diet
         .filter((item) => (this.isFood(item) ? "food" : "drink") == type)
-        .map((item) => item.name);
+        .map((item) => this.nameOf(item));
 
       message
         .reply(`I am running low on ${type}, are you able to send me some of the following?`)

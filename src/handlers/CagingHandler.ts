@@ -1,15 +1,17 @@
-import type { Client } from "kol.js";
+import { type Client, gameData } from "kol.js";
 import type { ApiStatus } from "kol.js/domains/ApiStatus";
 import { Effects } from "kol.js/domains/Effects";
+import { decode } from "html-entities";
 import { ExploredResponse } from "../utils/JsonResponses.js";
 import { CageBot } from "../CageBot.js";
-import { Settings, ChatMessage, KoLClan, KoLSkill, BuffySkill } from "../utils/Typings.js";
+import { Settings, ChatMessage, KoLClan } from "../utils/Typings.js";
 import {
   sendApiResponse,
   humanReadableTime,
   updateWhiteboard,
   toJson,
-  getBuffySkills,
+  getBuffyEffects,
+  MINUS_COMBAT_SKILLS,
   sendPrivateMessage,
 } from "../utils/Utils.js";
 
@@ -38,15 +40,21 @@ export class CagingHandler {
     // The next buffy request is after 1 day
     this._lastBuffyRequest = Date.now() + 24 * 60 * 60 * 1000;
 
-    // Find all effects that buffy can give us
-    const effects = Effects.parseEntries(status);
-    const wantBuffy: BuffySkill[] = getBuffySkills().filter(
-      (s) => effects.find((e) => e.id === s.effectId && e.duration > 50) == null
+    // Find all effects that buffy can give us that we don't already have plenty of
+    const active = Effects.parseEntries(status);
+    const wantedIds = getBuffyEffects().filter(
+      (id) => active.find((e) => e.id === id && e.duration > 50) == null
     );
 
-    for (const buffySkill of wantBuffy) {
-      console.log(`Requesting 500 turns of ${buffySkill.name} from Buffy`);
-      await this.client.chat.macro("/clan /w Buffy 500 " + buffySkill.name);
+    const byId = new Map((await gameData.findEffectsByIds(wantedIds)).map((e) => [e.id, e]));
+
+    for (const id of wantedIds) {
+      const effect = byId.get(id);
+      if (!effect) continue;
+
+      const name = decode(effect.name);
+      console.log(`Requesting 500 turns of ${name} from Buffy`);
+      await this.client.chat.macro(`/clan /w Buffy 500 ${name}`);
     }
   }
 
@@ -61,13 +69,14 @@ export class CagingHandler {
   async castAndMaintainEffects(status: ApiStatus): Promise<boolean> {
     await this.runBuffyRequest(status);
 
-    const effects = Effects.parseEntries(status);
+    const active = Effects.parseEntries(status);
 
     // Given we care less about evenly distributing skills as it should naturally balance with time..
     // Just find the first skill with not enough turns in the effect remaining.
-    const wantToCast: KoLSkill | undefined = this._cagebot
-      .getKnownSkills()
-      .find((s) => effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
+    const wantToCast = this._cagebot.getKnownSkills().find((skill) => {
+      const effectId = MINUS_COMBAT_SKILLS[skill.id];
+      return active.find((e) => e.id === effectId && e.duration > 300) == null;
+    });
 
     // If there is no skills we need to cast, return true
     if (!wantToCast) {
@@ -80,7 +89,7 @@ export class CagingHandler {
 
     if (timesToCast >= 1) {
       console.log(`Casting ${wantToCast.name} x ${timesToCast}`);
-      await this.client.skills.cast(wantToCast.skillId, {
+      await this.client.skills.cast(wantToCast.id, {
         count: timesToCast,
         target: this.client.playerId,
       });

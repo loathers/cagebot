@@ -7,6 +7,7 @@ import { CagingHandler } from "./handlers/CagingHandler.js";
 import { UncageHandler } from "./handlers/UncageHandler.js";
 import { Clan } from "kol.js/domains/Clan";
 import { HobopolisDungeon } from "kol.js/domains/Hobopolis";
+import type { Skill } from "data-of-loathing";
 import { BusyResponse, RequestResponse, StatusResponse } from "./utils/JsonResponses.js";
 import {
   ChatMessage,
@@ -15,7 +16,6 @@ import {
   KoLUser,
   KoLClan,
   LastClanRequest as CageCooldown,
-  KoLSkill,
 } from "./utils/Typings.js";
 import {
   humanReadableTime,
@@ -45,7 +45,7 @@ export class CageBot {
   private _cageHandler: CagingHandler;
   private _uncageHandler: UncageHandler;
   private _recentCages: CageCooldown[] = [];
-  private _knownSkills: KoLSkill[] = [];
+  private _knownSkills: Skill[] = [];
 
   constructor(username: string, password: string, settings: Settings) {
     this.client = new Client(username, password);
@@ -163,8 +163,8 @@ export class CageBot {
 
     this.getDietHandler().setMaxDrunk(settings.maxDrunk);
     this._cageTask = settings.cageTask;
-    this._knownSkills = getMinusCombatSkills().filter((skill) =>
-      settings.knownSkills.includes(skill.skillId)
+    this._knownSkills = (await getMinusCombatSkills()).filter((skill) =>
+      settings.knownSkills.includes(skill.id)
     );
 
     console.log("Loaded previous state from saved file");
@@ -341,10 +341,10 @@ export class CageBot {
 
     if (!this.isCaged()) {
       const skills = await this.client.charSheet.getSkills();
-      const knownSkillIds = [...skills.keys()].map((skill) => skill.id);
+      const knownSkillIds = new Set([...skills.keys()].map((skill) => skill.id));
 
-      this._knownSkills = getMinusCombatSkills().filter((skill) =>
-        knownSkillIds.includes(skill.skillId)
+      this._knownSkills = (await getMinusCombatSkills()).filter((skill) =>
+        knownSkillIds.has(skill.id)
       );
 
       await this._diet.maintainAdventures();

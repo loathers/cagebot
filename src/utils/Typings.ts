@@ -45,16 +45,3 @@ export type KoLClan = {
   name: string;
   id: number;
 };
-
-export type KoLSkill = {
-  name: string;
-  skillId: number;
-  effectId: number;
-  mpCost: number;
-};
-
-export type BuffySkill = {
-  name: string;
-  effectId: number;
-  mpCost: number;
-};

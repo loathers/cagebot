@@ -1,15 +1,8 @@
 import { type Client, gameData } from "kol.js";
-import type { Item } from "data-of-loathing";
+import type { Item, Skill } from "data-of-loathing";
 import { CageBot } from "../CageBot.js";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses.js";
-import {
-  CageTask,
-  ChatMessage,
-  SavedSettings,
-  KoLSkill,
-  BuffySkill,
-  KoLUser,
-} from "./Typings.js";
+import { CageTask, ChatMessage, SavedSettings, KoLUser } from "./Typings.js";
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
@@ -88,7 +81,7 @@ export async function sendApiResponse(
 export function saveSettings(
   turnsPlayed: number,
   maxDrunk: number,
-  knownSkills: KoLSkill[],
+  knownSkills: Skill[],
   task?: CageTask
 ) {
   writeFileSync(
@@ -97,7 +90,7 @@ export function saveSettings(
       validAtTurn: turnsPlayed,
       maxDrunk: maxDrunk,
       cageTask: task,
-      knownSkills: knownSkills.map((skill) => skill.skillId),
+      knownSkills: knownSkills.map((skill) => skill.id),
     } as SavedSettings),
     "utf-8"
   );
@@ -242,24 +235,31 @@ export function getLilBarrelDiet(): Promise<Item[]> {
   return resolveDiet(LIL_BARREL_DIET);
 }
 
-export function getMinusCombatSkills(): KoLSkill[] {
-  return [
-    { name: "Smooth Movement", mpCost: 10, skillId: 5017, effectId: 165 },
-    { name: "Musk of the Moose", mpCost: 10, skillId: 1019, effectId: 166 },
-    { name: "The Sonata of Sneakiness", mpCost: 20, skillId: 6015, effectId: 162 },
-  ];
+/**
+ * The -combat effect each minus-combat buff skill grants, keyed by skill id.
+ * The skill->effect link is the one thing game data doesn't expose, so it
+ * stays here; names and MP costs are read from the Skill objects.
+ */
+export const MINUS_COMBAT_SKILLS: Record<number, number> = {
+  5017: 165, // Smooth Movement -> Smooth Movements
+  1019: 166, // Musk of the Moose
+  6015: 162, // The Sonata of Sneakiness
+};
+
+export function getMinusCombatSkills(): Promise<Skill[]> {
+  return gameData.findSkillsByIds(Object.keys(MINUS_COMBAT_SKILLS).map(Number));
 }
 
 /**
- * Skills we can request from buffy that are useful, ordered by usefulness.
- * We skip ode to booze because it takes far more MP and we'd rather not abuse buffy too much. Perhaps if we clean up our consuming to wait for ode in the future..
+ * Effects we can request from Buffy, in order of usefulness.
+ * We skip Ode to Booze because it takes far more MP and we'd rather not abuse buffy too much. Perhaps if we clean up our consuming to wait for ode in the future..
  * Though it makes cages slower?
  *
  * TODO: Need to somehow detect when we have too many songs
  */
-export function getBuffySkills(): BuffySkill[] {
+export function getBuffyEffects(): number[] {
   return [
-    { name: "The Sonata of Sneakiness", mpCost: 20, effectId: 162 },
-    { name: "Paul's Passionate Pop Song", mpCost: 20, effectId: 2375 },
+    162, // The Sonata of Sneakiness
+    2375, // Paul's Passionate Pop Song
   ];
 }
