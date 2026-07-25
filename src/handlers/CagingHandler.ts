@@ -252,28 +252,23 @@ export class CagingHandler {
   }
 
   async attemptClanSwitch(targetClan: KoLClan): Promise<boolean> {
-    await this.getClient().joinClan(targetClan.id);
+    const join = await this.getClient().joinClan(targetClan.id);
 
-    if ((await this._cagebot.getClan().getCurrentClanId()) === targetClan.id) {
+    if (join.success) {
       return true;
     }
 
     console.log(
-      `Whitelisting to clan "${targetClan.name}" failed, checking if we can transfer leadership.`
+      `Whitelisting to clan "${targetClan.name}" failed (${join.reason}), checking if we can transfer leadership.`
     );
 
-    const currentClanId = await this._cagebot.getClan().getCurrentClanId();
-    const currentClanLeader = currentClanId
-      ? await this._cagebot.getClan().getLeader(currentClanId)
-      : null;
-
-    if (!currentClanLeader || currentClanLeader !== this._cagebot.getMe()?.id) {
-      console.log(`We do not appear to have leadership of the clan ${targetClan.name}.`);
+    // Joining a clan only fails with this reason when we lead our current one
+    if (join.reason !== "Already leader of a clan") {
+      console.log(`We do not appear to have leadership of our current clan.`);
 
       return false;
     }
 
-    // If we fetched the current clan leader, and we are the leader
     const inactiveMember = await this._cagebot.getClan().getInactiveMember();
 
     // If we found an inactive clan member
@@ -295,9 +290,7 @@ export class CagingHandler {
     }
 
     // If clan leadership transfer was successful
-    await this.getClient().joinClan(targetClan.id);
-
-    return (await this._cagebot.getClan().getCurrentClanId()) === targetClan.id;
+    return (await this.getClient().joinClan(targetClan.id)).success;
   }
 
   async attemptCage(message: ChatMessage, targetClan: KoLClan): Promise<void> {

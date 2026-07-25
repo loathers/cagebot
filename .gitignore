@@ -2,3 +2,4 @@ node_modules
 dist
 .env
 tsconfig.tsbuildinfo
+data/runtime_state.json
