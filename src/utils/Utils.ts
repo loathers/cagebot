@@ -1,5 +1,4 @@
 import type { Client } from "kol.js";
-import type { ApiStatus } from "kol.js/domains/ApiStatus";
 import { CageBot } from "../CageBot.js";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses.js";
 import {
@@ -9,10 +8,7 @@ import {
   SavedSettings,
   KoLSkill,
   BuffySkill,
-  KoLStatus,
-  KoLEffect,
   KoLUser,
-  EquipSlot,
 } from "./Typings.js";
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
@@ -75,42 +71,6 @@ export async function sendHobopolisMessage(client: Client, message: string): Pro
   for (const msg of splitMessage(message)) {
     await useChatMacro(client, `/w Hobopolis ${msg}`);
   }
-}
-
-export function toKoLStatus(status: ApiStatus): KoLStatus {
-  const equipment = new Map<EquipSlot, number>();
-
-  if (status.equipment) {
-    for (const [slot, itemId] of Object.entries(status.equipment)) {
-      if (itemId > 0) {
-        equipment.set(slot as EquipSlot, itemId);
-      }
-    }
-  }
-
-  const effects: KoLEffect[] = Object.values(status.effects)
-    .map(([name, duration, , , id]) => ({ name, duration, id }))
-    .filter((effect) => effect.duration > 0);
-
-  return {
-    level: status.level,
-    adventures: status.adventures,
-    drunk: status.drunk,
-    full: status.full,
-    hp: status.hp,
-    mp: status.mp,
-    maxHP: status.maxhp,
-    maxMP: status.maxmp,
-    familiar: status.familiar,
-    equipment: equipment,
-    rollover: status.rollover,
-    turnsPlayed: status.turnsplayed,
-    effects: effects,
-  };
-}
-
-export async function getKoLStatus(client: Client): Promise<KoLStatus> {
-  return toKoLStatus(await client.fetchStatus());
 }
 
 /**

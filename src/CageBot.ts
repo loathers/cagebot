@@ -25,7 +25,6 @@ import {
   loadSettings,
   toJson,
   createApiResponse,
-  getKoLStatus,
   getMinusCombatSkills,
   sendPrivateMessage,
   useChatMacro,
@@ -132,10 +131,10 @@ export class CageBot {
       return;
     }
 
-    const status = await getKoLStatus(this._client);
+    const status = await this._client.fetchStatus();
 
     saveSettings(
-      status.turnsPlayed,
+      status.turnsplayed,
       this.getDietHandler().getMaxDrunk() || 14,
       this._knownSkills,
       this.getCageTask()
@@ -155,10 +154,10 @@ export class CageBot {
       return;
     }
 
-    const status = await getKoLStatus(this._client);
+    const status = await this._client.fetchStatus();
 
     // If this was saved at turn X, but the current turn has differed
-    if (settings.validAtTurn != status.turnsPlayed) {
+    if (settings.validAtTurn != status.turnsplayed) {
       console.log("Runstate differs from expected, not loading.");
       return;
     }
@@ -566,7 +565,7 @@ export class CageBot {
   }
 
   private async statusReportByNonApi(message: ChatMessage) {
-    const status = await getKoLStatus(this._client);
+    const status = await this._client.fetchStatus();
 
     if (this._amCaged) {
       if (this._cageTask) {
@@ -615,7 +614,7 @@ export class CageBot {
   }
 
   private async statusReportByApi(message: ChatMessage) {
-    const status = await getKoLStatus(this._client);
+    const status = await this._client.fetchStatus();
     let busyStatus: BusyResponse | undefined;
 
     if (this._amCaged || this._cageTask) {

@@ -1,10 +1,10 @@
 import type { Client } from "kol.js";
 import { DietResponse } from "../utils/JsonResponses.js";
 import { CageBot } from "../CageBot.js";
-import { Diet, Settings, ChatMessage, KoLStatus } from "../utils/Typings.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import { Diet, Settings, ChatMessage } from "../utils/Typings.js";
 import {
   getInventory,
-  getKoLStatus,
   getLilBarrelDiet,
   getManualDiet,
   sendApiResponse,
@@ -55,12 +55,12 @@ export class DietHandler {
       return;
     }
 
-    const status = await getKoLStatus(this.getClient());
+    const status = await this.getClient().fetchStatus();
 
     this._ownsTuxedo =
-      (await getInventory(this.getClient())).has(2489) || status?.equipment.get("shirt") == 2489;
+      (await getInventory(this.getClient())).has(2489) || status.equipment?.shirt === 2489;
 
-    this._usingBarrelMimic = status?.familiar == 198;
+    this._usingBarrelMimic = status.familiar === 198;
 
     if (this._usingBarrelMimic) {
       this._diet = getLilBarrelDiet();
@@ -94,7 +94,7 @@ export class DietHandler {
   }
 
   async maintainAdventures(message?: ChatMessage): Promise<number> {
-    const status = await getKoLStatus(this.getClient());
+    const status = await this.getClient().fetchStatus();
     const beforeAdv = status.adventures;
 
     if (beforeAdv > this.getSettings().maintainAdventures) {
@@ -143,7 +143,7 @@ export class DietHandler {
         console.log(`Attempting to drink ${diet.name}, of which we have ${inventory.get(diet.id)}`);
 
         if (this._usingBarrelMimic && this._ownsTuxedo) {
-          const priorShirt = status.equipment.get("shirt") || 0;
+          const priorShirt = status.equipment?.shirt || 0;
 
           if (priorShirt != 2489) {
             await this.getClient().equipment.equip(2489);
@@ -167,7 +167,7 @@ export class DietHandler {
       return beforeAdv;
     }
 
-    const afterAdv = (await getKoLStatus(this.getClient())).adventures;
+    const afterAdv = (await this.getClient().fetchStatus()).adventures;
 
     if (beforeAdv === afterAdv) {
       if (itemConsumed) {
@@ -252,7 +252,7 @@ export class DietHandler {
 
   async getDietStatus(): Promise<DietResponse> {
     const inventory: Map<number, number> = await getInventory(this.getClient());
-    const status = await getKoLStatus(this.getClient());
+    const status = await this.getClient().fetchStatus();
     const level = status.level;
     let food: number = 0;
     let drink: number = 0;
@@ -322,7 +322,7 @@ export class DietHandler {
     }
   }
 
-  getPossibleAdventuresFromDiet(status: KoLStatus, inv: Map<number, number>): number {
+  getPossibleAdventuresFromDiet(status: ApiStatus, inv: Map<number, number>): number {
     if (!this._diet) {
       return 0;
     }

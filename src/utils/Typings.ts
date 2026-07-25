@@ -55,40 +55,6 @@ export type KoLClan = {
   id: number;
 };
 
-export type EquipSlot =
-  | "hat"
-  | "shirt"
-  | "pants"
-  | "weapon"
-  | "offhand"
-  | "acc1"
-  | "acc2"
-  | "acc3"
-  | "container"
-  | "cardsleeve";
-
-export type KoLStatus = {
-  turnsPlayed: number;
-  adventures: number;
-  full: number;
-  drunk: number;
-  rollover: number;
-  hp: number;
-  mp: number;
-  maxHP: number;
-  maxMP: number;
-  equipment: Map<EquipSlot, number>;
-  familiar?: number;
-  level: number;
-  effects: KoLEffect[];
-};
-
-export type KoLEffect = {
-  name: string;
-  duration: number;
-  id: number;
-};
-
 export type KoLSkill = {
   name: string;
   skillId: number;

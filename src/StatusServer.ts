@@ -1,7 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import { CageBot } from "./CageBot.js";
-import { KoLStatus } from "./utils/Typings.js";
-import { getKoLStatus } from "./utils/Utils.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
 
 const STATUS_CACHE_MS = 60_000;
 
@@ -27,15 +26,15 @@ type StatusData = {
 };
 
 export function startStatusServer(cageBot: CageBot) {
-  let cachedStatus: KoLStatus | undefined;
+  let cachedStatus: ApiStatus | undefined;
   let cachedAt = 0;
 
-  async function getCachedStatus(): Promise<KoLStatus | undefined> {
+  async function getCachedStatus(): Promise<ApiStatus | undefined> {
     const client = cageBot.getClient();
 
     if (Date.now() - cachedAt >= STATUS_CACHE_MS && !client.isRollover()) {
       try {
-        cachedStatus = await getKoLStatus(client);
+        cachedStatus = await client.fetchStatus();
         cachedAt = Date.now();
       } catch (error) {
         // Keep serving the last known status if KoL is unreachable

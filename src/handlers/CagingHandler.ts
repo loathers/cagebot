@@ -1,14 +1,15 @@
 import type { Client } from "kol.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import { Effects } from "kol.js/domains/Effects";
 import { ExploredResponse } from "../utils/JsonResponses.js";
 import { CageBot } from "../CageBot.js";
-import { Settings, ChatMessage, KoLClan, KoLSkill, KoLStatus, BuffySkill } from "../utils/Typings.js";
+import { Settings, ChatMessage, KoLClan, KoLSkill, BuffySkill } from "../utils/Typings.js";
 import {
   sendApiResponse,
   humanReadableTime,
   updateWhiteboard,
   toJson,
   getBuffySkills,
-  getKoLStatus,
   sendPrivateMessage,
   useChatMacro,
 } from "../utils/Utils.js";
@@ -29,7 +30,7 @@ export class CagingHandler {
     return this._cagebot.getSettings();
   }
 
-  async runBuffyRequest(status: KoLStatus) {
+  async runBuffyRequest(status: ApiStatus) {
     // We request from buffy only once every 24 hours, because buffy should always be sending us enough buffs for multiple days
     if (this._lastBuffyRequest > Date.now()) {
       return;
@@ -39,8 +40,9 @@ export class CagingHandler {
     this._lastBuffyRequest = Date.now() + 24 * 60 * 60 * 1000;
 
     // Find all effects that buffy can give us
+    const effects = Effects.parseEntries(status);
     const wantBuffy: BuffySkill[] = getBuffySkills().filter(
-      (s) => status.effects.find((e) => e.id === s.effectId && e.duration > 50) == null
+      (s) => effects.find((e) => e.id === s.effectId && e.duration > 50) == null
     );
 
     for (const buffySkill of wantBuffy) {
@@ -57,14 +59,16 @@ export class CagingHandler {
    *
    * @returns True if we should avoid calling again
    */
-  async castAndMaintainEffects(status: KoLStatus): Promise<boolean> {
+  async castAndMaintainEffects(status: ApiStatus): Promise<boolean> {
     await this.runBuffyRequest(status);
+
+    const effects = Effects.parseEntries(status);
 
     // Given we care less about evenly distributing skills as it should naturally balance with time..
     // Just find the first skill with not enough turns in the effect remaining.
     const wantToCast: KoLSkill | undefined = this._cagebot
       .getKnownSkills()
-      .find((s) => status.effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
+      .find((s) => effects.find((e) => e.id === s.effectId && e.duration > 300) == null);
 
     // If there is no skills we need to cast, return true
     if (!wantToCast) {
@@ -310,7 +314,7 @@ export class CagingHandler {
     });
 
     await useChatMacro(this.getClient(), "/listenon Hobopolis");
-    let status = await getKoLStatus(this.getClient());
+    let status = await this.getClient().fetchStatus();
     let maintainEffects: boolean = await this.castAndMaintainEffects(status);
 
     let gratesOpened = 0;
@@ -344,23 +348,23 @@ export class CagingHandler {
     console.log(`Beginning turns in ${targetClan.name} sewers.`);
     let caged = this._cagebot.isCaged();
     let lastAdventuresCheck = 0;
-    let lastAdventuresCount = status.turnsPlayed;
+    let lastAdventuresCount = status.turnsplayed;
 
     const turnsSpentSinceLastCheck: () => number = () => {
       return totalTurnsSpent + estimatedTurnsSpent - lastAdventuresCheck;
     };
 
     const adventuringNormally: () => Promise<boolean> = async () => {
-      status = await getKoLStatus(this.getClient());
+      status = await this.getClient().fetchStatus();
 
       // If we thought we had burned adventures, but we had more adventures than expected.
-      if (lastAdventuresCount == status.turnsPlayed && turnsSpentSinceLastCheck() > 3) {
+      if (lastAdventuresCount == status.turnsplayed && turnsSpentSinceLastCheck() > 3) {
         errorReason = `Expected to have burned through adventures, but none were consumed.`;
         return false;
       }
 
       lastAdventuresCheck = estimatedTurnsSpent + totalTurnsSpent;
-      lastAdventuresCount = status.turnsPlayed;
+      lastAdventuresCount = status.turnsplayed;
 
       return true;
     };
@@ -563,7 +567,7 @@ export class CagingHandler {
       await updateWhiteboard(this._cagebot, this._cagebot.isCaged());
     }
 
-    const endAdvs = (await getKoLStatus(this.getClient())).adventures;
+    const endAdvs = (await this.getClient().fetchStatus()).adventures;
     const spentAdvs = totalTurnsSpent + (currentAdventures - endAdvs);
 
     if (estimatedTurnsSpent + totalTurnsSpent != spentAdvs) {
