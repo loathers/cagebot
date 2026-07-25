@@ -27,7 +27,6 @@ import {
   createApiResponse,
   getMinusCombatSkills,
   sendPrivateMessage,
-  useChatMacro,
 } from "./utils/Utils.js";
 import { readFileSync } from "fs";
 
@@ -35,7 +34,7 @@ const mutex = new Mutex();
 
 export class CageBot {
   private _privateMessages: ChatMessage[] = [];
-  private _client: Client;
+  private client: Client;
   private _clan: Clan;
   private _hobopolis: HobopolisDungeon;
   private _amCaged: boolean = false;
@@ -49,9 +48,9 @@ export class CageBot {
   private _knownSkills: KoLSkill[] = [];
 
   constructor(username: string, password: string, settings: Settings) {
-    this._client = new Client(username, password);
-    this._clan = new Clan(this._client);
-    this._hobopolis = new HobopolisDungeon(this._client);
+    this.client = new Client(username, password);
+    this._clan = new Clan(this.client);
+    this._hobopolis = new HobopolisDungeon(this.client);
     this._settings = settings;
 
     this._diet = new DietHandler(this);
@@ -90,7 +89,7 @@ export class CageBot {
   }
 
   getClient(): Client {
-    return this._client;
+    return this.client;
   }
 
   getClan(): Clan {
@@ -102,11 +101,11 @@ export class CageBot {
   }
 
   getMe(): KoLUser | undefined {
-    if (!this._client.playerId) {
+    if (!this.client.playerId) {
       return undefined;
     }
 
-    return { id: parseInt(this._client.playerId), name: this._client.username };
+    return { id: parseInt(this.client.playerId), name: this.client.username };
   }
 
   getSettings(): Settings {
@@ -131,7 +130,7 @@ export class CageBot {
       return;
     }
 
-    const status = await this._client.fetchStatus();
+    const status = await this.client.fetchStatus();
 
     saveSettings(
       status.turnsplayed,
@@ -154,7 +153,7 @@ export class CageBot {
       return;
     }
 
-    const status = await this._client.fetchStatus();
+    const status = await this.client.fetchStatus();
 
     // If this was saved at turn X, but the current turn has differed
     if (settings.validAtTurn != status.turnsplayed) {
@@ -175,24 +174,24 @@ export class CageBot {
     console.log("Starting Cagebot...");
     console.log(`We're trying to maintain ${this._settings.maintainAdventures} adventures`);
 
-    while (!(await this._client.login())) {
-      if (this._client.isRollover()) {
+    while (!(await this.client.login())) {
+      if (this.client.isRollover()) {
         console.log("Rollover is in progress, waiting for it to end.");
-        await this._client.waitForRolloverEnd();
+        await this.client.waitForRolloverEnd();
       } else {
         console.log("Login failed, retrying in 60 seconds.");
         await new Promise((resolve) => setTimeout(resolve, 60_000));
       }
     }
 
-    await this._client.loadGameData();
+    await this.client.loadGameData();
     await this.performLoginTasks();
   }
 
   async performLoginTasks(): Promise<void> {
     await this.doInitialSetup();
 
-    const secondsToRollover = await this._client.secondsToRollover();
+    const secondsToRollover = await this.client.secondsToRollover();
 
     console.log(`The next rollover is in ${humanReadableTime(secondsToRollover)}`);
 
@@ -206,11 +205,11 @@ export class CageBot {
 
     console.log("Initial setup complete. Polling messages.");
 
-    this._client.on("whisper", (message) => this.enqueueChatMessage(message, true));
-    this._client.on("public", (message) => this.enqueueChatMessage(message, false));
+    this.client.on("whisper", (message) => this.enqueueChatMessage(message, true));
+    this.client.on("public", (message) => this.enqueueChatMessage(message, false));
 
     // Fired when the first request after a rollover has ended goes through
-    this._client.on("rollover", async () => {
+    this.client.on("rollover", async () => {
       await this.testForThirdPartyUncaging();
 
       if (!this.isCaged()) {
@@ -221,14 +220,14 @@ export class CageBot {
     let checkingChat = false;
 
     setInterval(async () => {
-      if (checkingChat || this._client.isRollover()) {
+      if (checkingChat || this.client.isRollover()) {
         return;
       }
 
       checkingChat = true;
 
       try {
-        await this._client.chat.check();
+        await this.client.chat.check();
       } catch (error) {
         console.log(`Failed to poll chat: ${error}`);
       } finally {
@@ -248,9 +247,9 @@ export class CageBot {
       apiRequest: message.msg.includes(".api"),
       reply: async (text: string) => {
         if (isPrivate) {
-          await sendPrivateMessage(this._client, who, text);
+          await sendPrivateMessage(this.client, who, text);
         } else {
-          await useChatMacro(this._client, `/w Hobopolis ${text}`);
+          await this.client.chat.macro(`/clan /w Hobopolis ${text}`);
         }
       },
     };
@@ -279,7 +278,7 @@ export class CageBot {
 
   async doInitialSetup(): Promise<void> {
     await this.doSetup();
-    await useChatMacro(this._client, "/listenon Hobopolis");
+    await this.client.chat.macro("/clan /listenon Hobopolis");
 
     if (this.isCaged()) {
       console.log("We appear to be caged.");
@@ -288,15 +287,15 @@ export class CageBot {
     }
 
     // Ensure the "Area might be too tough for you" warning is disabled
-    await this._client.account.setFlag("ignorezonewarnings", 1);
+    await this.client.account.setFlag("ignorezonewarnings", 1);
 
-    let macro = (await this._client.combatMacros.list()).find((m) => m.name === "CAGEBOT");
+    let macro = (await this.client.combatMacros.list()).find((m) => m.name === "CAGEBOT");
     const macroText = readFileSync("./data/CombatMacro.txt", "utf-8");
 
     if (!macro) {
       console.log("Combat Macro not found, we will be saving the default!");
 
-      const saved = await this._client.combatMacros.save("CAGEBOT", macroText);
+      const saved = await this.client.combatMacros.save("CAGEBOT", macroText);
 
       if (!saved.success) {
         throw "Failed to create the CAGEBOT macro!";
@@ -304,14 +303,14 @@ export class CageBot {
 
       macro = { id: saved.id, name: "CAGEBOT" };
     } else {
-      const theirMacro = decode(await this._client.combatMacros.getText(macro.id));
+      const theirMacro = decode(await this.client.combatMacros.getText(macro.id));
 
       if (theirMacro !== macroText) {
         console.log("Custom CAGEBOT macro detected! This is probably fine.");
       }
     }
 
-    const currentMacro = await this._client.account.getAutoattackMacro();
+    const currentMacro = await this.client.account.getAutoattackMacro();
 
     if (!currentMacro || currentMacro.name !== "CAGEBOT") {
       if (!currentMacro) {
@@ -323,7 +322,7 @@ export class CageBot {
       }
     }
 
-    const autoattackMacro = (await this._client.account.getAutoattackMacros()).find(
+    const autoattackMacro = (await this.client.account.getAutoattackMacros()).find(
       (m) => m.name === "CAGEBOT"
     );
 
@@ -331,8 +330,8 @@ export class CageBot {
       throw "Failed to find the CAGEBOT macro in the autoattack options!";
     }
 
-    await this._client.account.setFlag("aabosses", 1);
-    await this._client.account.setAutoattack(autoattackMacro.id);
+    await this.client.account.setFlag("aabosses", 1);
+    await this.client.account.setAutoattack(autoattackMacro.id);
   }
 
   async doSetup(): Promise<void> {
@@ -341,7 +340,7 @@ export class CageBot {
     await this.getDietHandler().doSetup();
 
     if (!this.isCaged()) {
-      const skills = await this._client.charSheet.getSkills();
+      const skills = await this.client.charSheet.getSkills();
       const knownSkillIds = [...skills.keys()].map((skill) => skill.id);
 
       this._knownSkills = getMinusCombatSkills().filter((skill) =>
@@ -397,7 +396,7 @@ export class CageBot {
     let rescued = message.msg.match(/(.*?) has rescued (.*?) from the C. H. U. M.s./);
 
     if (rescued != null) {
-      if (rescued[2].toLowerCase() != this._client.username.toLowerCase()) {
+      if (rescued[2].toLowerCase() != this.client.username.toLowerCase()) {
         return;
       }
 
@@ -405,9 +404,8 @@ export class CageBot {
         console.log(`${rescued[1]} rescued me from the C. H. U. M.s cage, that was nice of them.`);
 
         // No API responses for this, a script likely would leave the cagebot in.
-        useChatMacro(
-          this._client,
-          `/w ${rescued[1].replaceAll(
+        this.client.chat.macro(
+          `/clan /w ${rescued[1].replaceAll(
             " ",
             "_"
           )} Thank you for rescuing me! You didn't have to though!`
@@ -439,13 +437,13 @@ export class CageBot {
 
         if (task.apiResponses) {
           sendPrivateMessage(
-            this._client,
+            this.client,
             task.requester,
             createApiResponse("Notification", "remember_to_unbait")
           );
         } else {
           sendPrivateMessage(
-            this._client,
+            this.client,
             task.requester,
             `You've made it through the sewers! If cagebait is no longer required, whisper me "escape".`
           );
@@ -466,7 +464,7 @@ export class CageBot {
       msg: `escape${task.apiResponses ? ".api" : ""}`,
       apiRequest: task.apiResponses,
       reply: async (message: string) =>
-        await sendPrivateMessage(this._client, task.requester, message),
+        await sendPrivateMessage(this.client, task.requester, message),
     };
 
     await this.runBlockingRequest(fakeMessage, () => this._uncageHandler.escapeCage(fakeMessage));
@@ -565,7 +563,7 @@ export class CageBot {
   }
 
   private async statusReportByNonApi(message: ChatMessage) {
-    const status = await this._client.fetchStatus();
+    const status = await this.client.fetchStatus();
 
     if (this._amCaged) {
       if (this._cageTask) {
@@ -614,7 +612,7 @@ export class CageBot {
   }
 
   private async statusReportByApi(message: ChatMessage) {
-    const status = await this._client.fetchStatus();
+    const status = await this.client.fetchStatus();
     let busyStatus: BusyResponse | undefined;
 
     if (this._amCaged || this._cageTask) {

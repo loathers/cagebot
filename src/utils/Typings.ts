@@ -13,15 +13,6 @@ export type SavedSettings = {
   knownSkills: number[];
 };
 
-export type Diet = {
-  type: "food" | "drink";
-  id: number; // Item ID
-  name: string; // Name
-  level: number; // Level required to consume
-  fullness: number; // Full/Drunk of the item
-  estAdvs: number; // Underestimate of the adventures given
-};
-
 export type Settings = {
   maintainAdventures: number;
   whiteboardMessageCaged?: string;

@@ -1,10 +1,10 @@
-import type { Client } from "kol.js";
+import { type Client, gameData } from "kol.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import type { Item } from "data-of-loathing";
 import { DietResponse } from "../utils/JsonResponses.js";
 import { CageBot } from "../CageBot.js";
-import type { ApiStatus } from "kol.js/domains/ApiStatus";
-import { Diet, Settings, ChatMessage } from "../utils/Typings.js";
+import { Settings, ChatMessage } from "../utils/Typings.js";
 import {
-  getInventory,
   getLilBarrelDiet,
   getManualDiet,
   sendApiResponse,
@@ -12,8 +12,12 @@ import {
   toJson,
 } from "../utils/Utils.js";
 
+const TUXEDO_SHIRT = 2489;
+const BARREL_MIMIC = 198;
+const LIVER_OF_STEEL = 1;
+
 export class DietHandler {
-  private _diet?: Diet[];
+  private _diet?: Item[];
   private _cagebot: CageBot;
   private _maxDrunk?: number;
   private _usingBarrelMimic: boolean = false;
@@ -23,7 +27,7 @@ export class DietHandler {
     this._cagebot = cagebot;
   }
 
-  getClient(): Client {
+  private get client(): Client {
     return this._cagebot.getClient();
   }
 
@@ -39,12 +43,30 @@ export class DietHandler {
     this._maxDrunk = maxDrunk;
   }
 
+  // Per-item diet stats, derived from game data at the point of use.
+  private isFood(item: Item): boolean {
+    return item.consumable!.stomach > 0;
+  }
+
+  private fullnessOf(item: Item): number {
+    const consumable = item.consumable!;
+    return consumable.stomach > 0 ? consumable.stomach : consumable.liver;
+  }
+
+  private levelOf(item: Item): number {
+    return item.consumable!.levelRequirement;
+  }
+
+  // Floor the average yield to stay on the conservative side.
+  private estAdvsOf(item: Item): number {
+    return Math.floor(item.consumable!.adventures);
+  }
+
   async doSetup() {
     if (!this._cagebot.isCaged() && !this._maxDrunk) {
-      const skills = await this.getClient().charSheet.getSkills();
+      const skills = await this.client.charSheet.getSkills();
 
-      // Liver of steel is Skill ID #1
-      if ([...skills.keys()].some((skill) => skill.id === 1)) {
+      if ([...skills.keys()].some((skill) => skill.id === LIVER_OF_STEEL)) {
         this._maxDrunk = 19;
       } else {
         this._maxDrunk = 14;
@@ -55,18 +77,16 @@ export class DietHandler {
       return;
     }
 
-    const status = await this.getClient().fetchStatus();
+    const status = await this.client.fetchStatus();
+    const inventory = await this.client.inventory.get.refresh();
+    const tuxedo = await gameData.findItemById(TUXEDO_SHIRT);
 
     this._ownsTuxedo =
-      (await getInventory(this.getClient())).has(2489) || status.equipment?.shirt === 2489;
+      (tuxedo !== null && inventory.has(tuxedo)) || status.equipment?.shirt === TUXEDO_SHIRT;
 
-    this._usingBarrelMimic = status.familiar === 198;
+    this._usingBarrelMimic = status.familiar === BARREL_MIMIC;
 
-    if (this._usingBarrelMimic) {
-      this._diet = getLilBarrelDiet();
-    } else {
-      this._diet = getManualDiet();
-    }
+    this._diet = this._usingBarrelMimic ? await getLilBarrelDiet() : await getManualDiet();
 
     await this.sortDiet();
   }
@@ -76,25 +96,25 @@ export class DietHandler {
       return;
     }
 
-    const inv: Map<number, number> = await getInventory(this.getClient());
+    const inv = await this.client.inventory.get.refresh();
 
     // Sort our diet so that the best foods and drinks that are available are pushed to the very top.
     // This is so we can try even the spread of our consumed items between drink and food.
-    this._diet.sort((d1, d2) => {
-      let advs1 = d1.estAdvs / d1.fullness;
-      let advs2 = d2.estAdvs / d2.fullness;
+    this._diet.sort((a, b) => {
+      let advsA = this.estAdvsOf(a) / this.fullnessOf(a);
+      let advsB = this.estAdvsOf(b) / this.fullnessOf(b);
 
-      if (advs1 == advs2 || d1.type != d2.type) {
-        advs1 *= inv.get(d1.id) || 0;
-        advs2 *= inv.get(d2.id) || 0;
+      if (advsA == advsB || this.isFood(a) != this.isFood(b)) {
+        advsA *= inv.get(a) || 0;
+        advsB *= inv.get(b) || 0;
       }
 
-      return advs1 > advs2 ? -1 : 1;
+      return advsA > advsB ? -1 : 1;
     });
   }
 
   async maintainAdventures(message?: ChatMessage): Promise<number> {
-    const status = await this.getClient().fetchStatus();
+    const status = await this.client.fetchStatus();
     const beforeAdv = status.adventures;
 
     if (beforeAdv > this.getSettings().maintainAdventures) {
@@ -112,54 +132,56 @@ export class DietHandler {
     }
 
     const currentLevel = status.level;
-    const inventory: Map<number, number> = await getInventory(this.getClient());
+    const inventory = await this.client.inventory.get.refresh();
     let itemConsumed;
     let itemsMissing: string[] = [];
     let itemIdsMissing: string[] = [];
     let consumeMessage: any;
     let hasStomachSpace: boolean = false;
 
-    for (let diet of this._diet || []) {
-      if (diet.level > currentLevel) {
+    for (const item of this._diet || []) {
+      if (this.levelOf(item) > currentLevel) {
         continue;
       }
 
-      if (diet.fullness > (diet.type == "food" ? fullRemaining : drunkRemaining)) {
+      const isFood = this.isFood(item);
+
+      if (this.fullnessOf(item) > (isFood ? fullRemaining : drunkRemaining)) {
         continue;
       }
 
       hasStomachSpace = true;
 
-      if ((inventory.get(diet.id) || 0) <= 0) {
-        itemsMissing.push(diet.name);
-        itemIdsMissing.push(diet.id.toString());
+      if ((inventory.get(item) || 0) <= 0) {
+        itemsMissing.push(item.name);
+        itemIdsMissing.push(item.id.toString());
         continue;
       }
 
-      if (diet.type == "food") {
-        console.log(`Attempting to eat ${diet.name}, of which we have ${inventory.get(diet.id)}`);
-        consumeMessage = await this.getClient().consumption.eat(diet.id);
+      if (isFood) {
+        console.log(`Attempting to eat ${item.name}, of which we have ${inventory.get(item)}`);
+        consumeMessage = await this.client.consumption.eat(item);
       } else {
-        console.log(`Attempting to drink ${diet.name}, of which we have ${inventory.get(diet.id)}`);
+        console.log(`Attempting to drink ${item.name}, of which we have ${inventory.get(item)}`);
 
         if (this._usingBarrelMimic && this._ownsTuxedo) {
           const priorShirt = status.equipment?.shirt || 0;
 
-          if (priorShirt != 2489) {
-            await this.getClient().equipment.equip(2489);
+          if (priorShirt != TUXEDO_SHIRT) {
+            await this.client.equipment.equip(TUXEDO_SHIRT);
           }
 
-          consumeMessage = await this.getClient().consumption.drink(diet.id);
+          consumeMessage = await this.client.consumption.drink(item);
 
-          if (priorShirt > 0 && priorShirt != 2489) {
-            await this.getClient().equipment.equip(priorShirt);
+          if (priorShirt > 0 && priorShirt != TUXEDO_SHIRT) {
+            await this.client.equipment.equip(priorShirt);
           }
         } else {
-          consumeMessage = await this.getClient().consumption.drink(diet.id);
+          consumeMessage = await this.client.consumption.drink(item);
         }
       }
 
-      itemConsumed = diet.name;
+      itemConsumed = item.name;
       break;
     }
 
@@ -167,7 +189,7 @@ export class DietHandler {
       return beforeAdv;
     }
 
-    const afterAdv = (await this.getClient().fetchStatus()).adventures;
+    const afterAdv = (await this.client.fetchStatus()).adventures;
 
     if (beforeAdv === afterAdv) {
       if (itemConsumed) {
@@ -196,7 +218,7 @@ export class DietHandler {
             );
           } else {
             await sendPrivateMessage(
-              this.getClient(),
+              this.client,
               message.who,
               `Please tell my operator that I am out of ${itemsMissing.join(", ")}.`
             );
@@ -234,7 +256,7 @@ export class DietHandler {
     const dietStatus = await this.getDietStatus();
 
     if (message.apiRequest) {
-      await sendPrivateMessage(this.getClient(), message.who, toJson(dietStatus));
+      await sendPrivateMessage(this.client, message.who, toJson(dietStatus));
     } else {
       await message.reply(
         `My remaining diet today has an expected outcome of ${dietStatus.possibleAdvsToday} adventures.`
@@ -251,8 +273,8 @@ export class DietHandler {
   }
 
   async getDietStatus(): Promise<DietResponse> {
-    const inventory: Map<number, number> = await getInventory(this.getClient());
-    const status = await this.getClient().fetchStatus();
+    const inventory = await this.client.inventory.get.refresh();
+    const status = await this.client.fetchStatus();
     const level = status.level;
     let food: number = 0;
     let drink: number = 0;
@@ -260,35 +282,19 @@ export class DietHandler {
     let drunkAdvs: number = 0;
     let advs: number = this.getPossibleAdventuresFromDiet(status, inventory);
 
-    for (let diet of this._diet || []) {
-      if (!inventory.has(diet.id) || diet.level > level) {
+    for (const item of this._diet || []) {
+      if (!inventory.has(item) || this.levelOf(item) > level) {
         continue;
       }
 
-      let count = inventory.get(diet.id) || 0;
+      const count = inventory.get(item) || 0;
 
-      if (diet.type == "food") {
-        food += count * diet.fullness;
-        fullAdvs += count * diet.estAdvs;
+      if (this.isFood(item)) {
+        food += count * this.fullnessOf(item);
+        fullAdvs += count * this.estAdvsOf(item);
       } else {
-        drink += count * diet.fullness;
-        drunkAdvs += count * diet.estAdvs;
-      }
-    }
-
-    for (let diet of this._diet || []) {
-      if (!inventory.has(diet.id) || diet.level > level) {
-        continue;
-      }
-
-      let count = inventory.get(diet.id) || 0;
-
-      if (diet.type == "food") {
-        food += count * diet.fullness;
-        fullAdvs += count * diet.estAdvs;
-      } else {
-        drink += count * diet.fullness;
-        drunkAdvs += count * diet.estAdvs;
+        drink += count * this.fullnessOf(item);
+        drunkAdvs += count * this.estAdvsOf(item);
       }
     }
 
@@ -312,7 +318,9 @@ export class DietHandler {
     for (const type of ["food", "drink"]) {
       if ((type == "food" ? status.fullnessAdvs : status.drunknessAdvs) >= 1000) continue;
 
-      const diet = this._diet.filter((d) => d.type == type).map((d) => d.name);
+      const diet = this._diet
+        .filter((item) => (this.isFood(item) ? "food" : "drink") == type)
+        .map((item) => item.name);
 
       message
         .reply(`I am running low on ${type}, are you able to send me some of the following?`)
@@ -322,7 +330,7 @@ export class DietHandler {
     }
   }
 
-  getPossibleAdventuresFromDiet(status: ApiStatus, inv: Map<number, number>): number {
+  getPossibleAdventuresFromDiet(status: ApiStatus, inv: Map<Item, number>): number {
     if (!this._diet) {
       return 0;
     }
@@ -331,24 +339,24 @@ export class DietHandler {
     let fullRemaining: number = 14 - status.full;
     let advs: number = 0;
 
-    for (let diet of this._diet) {
-      if (diet.level > status.level) {
+    for (const item of this._diet) {
+      if (this.levelOf(item) > status.level) {
         continue;
       }
 
-      let amount = inv.get(diet.id) || 0;
+      let amount = inv.get(item) || 0;
+      const isFood = this.isFood(item);
+      const fullness = this.fullnessOf(item);
+      const estAdvs = this.estAdvsOf(item);
 
-      while (
-        amount > 0 &&
-        (diet.type == "food" ? fullRemaining : drunkRemaining) >= diet.fullness
-      ) {
-        advs += diet.estAdvs;
+      while (amount > 0 && (isFood ? fullRemaining : drunkRemaining) >= fullness) {
+        advs += estAdvs;
         amount--;
 
-        if (diet.type == "food") {
-          fullRemaining -= diet.fullness;
+        if (isFood) {
+          fullRemaining -= fullness;
         } else {
-          drunkRemaining -= diet.fullness;
+          drunkRemaining -= fullness;
         }
       }
     }

@@ -11,7 +11,6 @@ import {
   toJson,
   getBuffySkills,
   sendPrivateMessage,
-  useChatMacro,
 } from "../utils/Utils.js";
 
 export class CagingHandler {
@@ -22,7 +21,7 @@ export class CagingHandler {
     this._cagebot = cagebot;
   }
 
-  getClient(): Client {
+  private get client(): Client {
     return this._cagebot.getClient();
   }
 
@@ -47,7 +46,7 @@ export class CagingHandler {
 
     for (const buffySkill of wantBuffy) {
       console.log(`Requesting 500 turns of ${buffySkill.name} from Buffy`);
-      await useChatMacro(this.getClient(), "/w Buffy 500 " + buffySkill.name);
+      await this.client.chat.macro("/clan /w Buffy 500 " + buffySkill.name);
     }
   }
 
@@ -81,9 +80,9 @@ export class CagingHandler {
 
     if (timesToCast >= 1) {
       console.log(`Casting ${wantToCast.name} x ${timesToCast}`);
-      await this.getClient().skills.cast(wantToCast.skillId, {
+      await this.client.skills.cast(wantToCast.skillId, {
         count: timesToCast,
-        target: this.getClient().playerId,
+        target: this.client.playerId,
       });
     }
 
@@ -99,7 +98,7 @@ export class CagingHandler {
 
     await this._cagebot.testForThirdPartyUncaging();
 
-    const timeToRollover = await this.getClient().secondsToRollover();
+    const timeToRollover = await this.client.secondsToRollover();
 
     // If rollover is less than 7 minutes away
     if (timeToRollover < 7 * 60) {
@@ -107,7 +106,7 @@ export class CagingHandler {
         await sendApiResponse(message, "Error", "rollover");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `Rollover is in ${humanReadableTime(
             timeToRollover
@@ -125,7 +124,7 @@ export class CagingHandler {
         sendApiResponse(message, "Error", "invalid_clan");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           "Please provide the name of a clan I am whitelisted in."
         );
@@ -149,7 +148,7 @@ export class CagingHandler {
       return;
     }
 
-    const whitelists = (await this.getClient().getClanWhitelists()).filter((clan: KoLClan) =>
+    const whitelists = (await this.client.getClanWhitelists()).filter((clan: KoLClan) =>
       clan.name.toLowerCase().includes(clanName.toLowerCase())
     );
 
@@ -164,7 +163,7 @@ export class CagingHandler {
         await sendApiResponse(message, "Error", "clan_ambiguous");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `I'm in multiple clans named ${clanName}: ${whitelists
             .map((c) => c.name)
@@ -182,7 +181,7 @@ export class CagingHandler {
         await sendApiResponse(message, "Error", "not_whitelisted");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `I'm not in any clans named ${clanName}. Check your spelling, or ensure I have a whitelist.`
         );
@@ -225,7 +224,7 @@ export class CagingHandler {
         await sendApiResponse(message, "Error", "unsuccessful_whitelist");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `I tried to whitelist to ${targetClan.name}, but was unable to. Did I accidentally become a clan leader?`
         );
@@ -243,7 +242,7 @@ export class CagingHandler {
         await sendApiResponse(message, "Error", "no_hobo_access");
       } else {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `I can't seem to access the sewers in ${targetClan.name}. Is Hobopolis open? Do I have the right permissions?`
         );
@@ -256,7 +255,7 @@ export class CagingHandler {
   }
 
   async attemptClanSwitch(targetClan: KoLClan): Promise<boolean> {
-    const join = await this.getClient().joinClan(targetClan.id);
+    const join = await this.client.joinClan(targetClan.id);
 
     if (join.success) {
       return true;
@@ -294,7 +293,7 @@ export class CagingHandler {
     }
 
     // If clan leadership transfer was successful
-    return (await this.getClient().joinClan(targetClan.id)).success;
+    return (await this.client.joinClan(targetClan.id)).success;
   }
 
   async attemptCage(message: ChatMessage, targetClan: KoLClan): Promise<void> {
@@ -313,8 +312,8 @@ export class CagingHandler {
           : false,
     });
 
-    await useChatMacro(this.getClient(), "/listenon Hobopolis");
-    let status = await this.getClient().fetchStatus();
+    await this.client.chat.macro("/clan /listenon Hobopolis");
+    let status = await this.client.fetchStatus();
     let maintainEffects: boolean = await this.castAndMaintainEffects(status);
 
     let gratesOpened = 0;
@@ -339,7 +338,7 @@ export class CagingHandler {
       await sendApiResponse(message, "Accepted", "doing_cage");
     } else {
       await sendPrivateMessage(
-        this.getClient(),
+        this.client,
         message.who,
         `Attempting to get caged in ${targetClan.name}.`
       );
@@ -355,7 +354,7 @@ export class CagingHandler {
     };
 
     const adventuringNormally: () => Promise<boolean> = async () => {
-      status = await this.getClient().fetchStatus();
+      status = await this.client.fetchStatus();
 
       // If we thought we had burned adventures, but we had more adventures than expected.
       if (lastAdventuresCount == status.turnsplayed && turnsSpentSinceLastCheck() > 3) {
@@ -515,7 +514,7 @@ export class CagingHandler {
           toSend += ' Release me later by whispering "escape" to me.';
         }
 
-        await sendPrivateMessage(this.getClient(), message.who, toSend);
+        await sendPrivateMessage(this.client, message.who, toSend);
       }
 
       await this._cagebot.saveSettings();
@@ -531,7 +530,7 @@ export class CagingHandler {
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
           await sendPrivateMessage(
-            this.getClient(),
+            this.client,
             message.who,
             `I ran out of adventures trying to get caged in ${targetClan.name}.`
           );
@@ -544,7 +543,7 @@ export class CagingHandler {
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
           await sendPrivateMessage(
-            this.getClient(),
+            this.client,
             message.who,
             `Failed to be caged in ${targetClan.name}, ${errorReason}`
           );
@@ -557,7 +556,7 @@ export class CagingHandler {
         // API doesn't send a message here, but sends it later
         if (!message.apiRequest) {
           await sendPrivateMessage(
-            this.getClient(),
+            this.client,
             message.who,
             `Something unspecified went wrong while I was trying to get caged in ${targetClan.name}. Good luck.`
           );
@@ -567,7 +566,7 @@ export class CagingHandler {
       await updateWhiteboard(this._cagebot, this._cagebot.isCaged());
     }
 
-    const endAdvs = (await this.getClient().fetchStatus()).adventures;
+    const endAdvs = (await this.client.fetchStatus()).adventures;
     const spentAdvs = totalTurnsSpent + (currentAdventures - endAdvs);
 
     if (estimatedTurnsSpent + totalTurnsSpent != spentAdvs) {
@@ -597,10 +596,10 @@ export class CagingHandler {
         chews: timesChewedOut,
       };
 
-      await sendPrivateMessage(this.getClient(), message.who, toJson(hoboStatus));
+      await sendPrivateMessage(this.client, message.who, toJson(hoboStatus));
     } else {
       await sendPrivateMessage(
-        this.getClient(),
+        this.client,
         message.who,
         `I opened ${gratesOpened} grate${
           gratesOpened === 1 ? "" : "s"
@@ -611,7 +610,7 @@ export class CagingHandler {
 
       if (gratesOpened > 0 || valvesTwisted > 0) {
         await sendPrivateMessage(
-          this.getClient(),
+          this.client,
           message.who,
           `Hobopolis has ${gratesOpened + gratesFoundOpen} / 20 grates open, ${
             valvesTwisted + valvesFoundTwisted

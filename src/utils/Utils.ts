@@ -1,9 +1,9 @@
-import type { Client } from "kol.js";
+import { type Client, gameData } from "kol.js";
+import type { Item } from "data-of-loathing";
 import { CageBot } from "../CageBot.js";
 import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses.js";
 import {
   CageTask,
-  Diet,
   ChatMessage,
   SavedSettings,
   KoLSkill,
@@ -53,35 +53,14 @@ export function splitMessage(message: string, limit: number = 245): string[] {
   return messages;
 }
 
-export async function useChatMacro(client: Client, macro: string): Promise<void> {
-  await client.chat.macro(`/clan ${macro}`);
-}
-
 export async function sendPrivateMessage(
   client: Client,
   recipient: KoLUser,
   message: string
 ): Promise<void> {
   for (const msg of splitMessage(message)) {
-    await useChatMacro(client, `/w ${recipient.id} ${msg}`);
+    await client.chat.send(recipient.id, msg);
   }
-}
-
-export async function sendHobopolisMessage(client: Client, message: string): Promise<void> {
-  for (const msg of splitMessage(message)) {
-    await useChatMacro(client, `/w Hobopolis ${msg}`);
-  }
-}
-
-/**
- * The bot's inventory as a map of item id to count.
- *
- * Always refreshes so that items sent to the bot since the last check are
- * seen.
- */
-export async function getInventory(client: Client): Promise<Map<number, number>> {
-  const inventory = await client.inventory.get.refresh();
-  return new Map([...inventory].map(([item, count]) => [item.id, count]));
 }
 
 export function toJson(object: any) {
@@ -216,188 +195,51 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
   await cagebot.getClan().writeWhiteboard(text);
 }
 
-export function getManualDiet(): Diet[] {
-  const diet: Diet[] = [];
+// The items the bot is willing to consume. Order is irrelevant — DietHandler
+// sorts by yield at runtime. All per-item stats come from game data.
+const MANUAL_DIET = [
+  7215, // Fleetwood mac 'n' cheese
+  2767, // Crimbo pie
+  7370, // Psychotic Train wine
+  9948, // Middle of the Road™ brand whiskey
+];
 
-  diet.push({
-    type: "food",
-    id: 7215,
-    name: "Fleetwood mac 'n' cheese",
-    level: 8,
-    fullness: 6,
-    estAdvs: 30,
-  });
+const LIL_BARREL_DIET = [
+  319, 316, 1256, // Insanely spicy [enchanted/plain/jumping] bean burrito
+  318, 315, 1255, // Spicy [enchanted/plain/jumping] bean burrito
+  317, 314, 1254, // [Enchanted/plain/jumping] bean burrito
+  679, 680, 681, 682, 684, 797, 799, 1018, // Roll in the hay, Slap and Tickle, etc.
+  1567, 1570, 1568, 1564, 1565, 1566, // Gin and tonic, Gibson, etc.
+  250, 1012, 251, 1009, 788, 1013, // Screwdriver, Tequila sunrise, etc.
+];
 
-  diet.push({
-    type: "food",
-    id: 2767,
-    name: "Crimbo pie",
-    level: 7,
-    fullness: 3,
-    estAdvs: 11,
-  });
+/**
+ * Resolve a list of item ids into consumable items with their game data
+ * loaded. Per-item stats (fullness, level, adventures) are derived from
+ * `item.consumable` where needed, rather than duplicated here.
+ */
+async function resolveDiet(itemIds: number[]): Promise<Item[]> {
+  const items: Item[] = [];
 
-  diet.push({
-    type: "drink",
-    id: 7370,
-    name: "Psychotic Train wine",
-    level: 11,
-    fullness: 6,
-    estAdvs: 19,
-  });
+  for (const id of itemIds) {
+    const item = await gameData.findItemWithDetailById(id);
 
-  diet.push({
-    type: "drink",
-    id: 9948,
-    name: "Middle of the Road™ brand whiskey",
-    level: 1,
-    fullness: 2,
-    estAdvs: 4,
-  });
+    if (!item || !item.consumable) {
+      throw new Error(`Diet item ${id} is missing or not consumable`);
+    }
 
-  return diet;
+    items.push(item);
+  }
+
+  return items;
 }
 
-export function getLilBarrelDiet(): Diet[] {
-  const diet: Diet[] = [];
-  // Awesome
-  diet.push({
-    type: "food",
-    id: 319,
-    name: "Insanely spicy enchanted bean burrito",
-    level: 5,
-    fullness: 3,
-    estAdvs: 11,
-  });
-  diet.push({
-    type: "food",
-    id: 316,
-    name: "Insanely spicy bean burrito",
-    level: 4,
-    fullness: 3,
-    estAdvs: 10,
-  });
-  diet.push({
-    type: "food",
-    id: 1256,
-    name: "Insanely spicy jumping bean burrito",
-    level: 4,
-    fullness: 3,
-    estAdvs: 10,
-  });
+export function getManualDiet(): Promise<Item[]> {
+  return resolveDiet(MANUAL_DIET);
+}
 
-  // Good
-  for (let [name, drinkId] of [
-    ["Roll in the hay", 679],
-    ["Slap and Tickle", 680],
-    ["Slip 'n' slide", 681],
-    ["A little sump'm sump'm", 682],
-    ["Pink pony", 684],
-    ["Rockin' wagon", 797],
-    ["Fuzzbump", 799],
-    ["Calle de miel", 1018],
-  ]) {
-    diet.push({
-      type: "drink",
-      id: drinkId as number,
-      name: name as string,
-      level: 4,
-      fullness: 4,
-      estAdvs: 11,
-    });
-  }
-
-  // Good
-  diet.push({
-    type: "food",
-    id: 318,
-    name: "Spicy enchanted bean burrito",
-    level: 4,
-    fullness: 3,
-    estAdvs: 9,
-  });
-  diet.push({
-    type: "food",
-    id: 315,
-    name: "Spicy bean burrito",
-    level: 3,
-    fullness: 3,
-    estAdvs: 8,
-  });
-  diet.push({
-    type: "food",
-    id: 1255,
-    name: "Spicy jumping bean burrito",
-    level: 3,
-    fullness: 3,
-    estAdvs: 8,
-  });
-
-  // Good
-  for (let [name, drinkId] of [
-    ["Gin and tonic", 1567],
-    ["Gibson", 1570],
-    ["Vodka and tonic", 1568],
-    ["Mimosette", 1564],
-    ["Tequila sunset", 1565],
-    ["Zmobie", 1566],
-  ]) {
-    diet.push({
-      type: "drink",
-      id: drinkId as number,
-      name: name as string,
-      level: 3,
-      fullness: 3,
-      estAdvs: 7,
-    });
-  }
-
-  // Decent
-  diet.push({
-    type: "food",
-    id: 317,
-    name: "Enchanted bean burrito",
-    level: 2,
-    fullness: 3,
-    estAdvs: 6,
-  });
-  diet.push({
-    type: "food",
-    id: 314,
-    name: "Bean burrito",
-    level: 1,
-    fullness: 3,
-    estAdvs: 5,
-  });
-  diet.push({
-    type: "food",
-    id: 1254,
-    name: "Jumping bean burrito",
-    level: 1,
-    fullness: 3,
-    estAdvs: 5,
-  });
-
-  // Decent
-  for (let [name, drinkId] of [
-    ["Screwdriver", 250],
-    ["Tequila sunrise", 1012],
-    ["Martini", 251],
-    ["Vodka martini", 1009],
-    ["Strawberry daiquiri", 788],
-    ["Margarita", 1013],
-  ]) {
-    diet.push({
-      type: "drink",
-      id: drinkId as number,
-      name: name as string,
-      level: 1,
-      fullness: 3,
-      estAdvs: 5,
-    });
-  }
-
-  return diet;
+export function getLilBarrelDiet(): Promise<Item[]> {
+  return resolveDiet(LIL_BARREL_DIET);
 }
 
 export function getMinusCombatSkills(): KoLSkill[] {
