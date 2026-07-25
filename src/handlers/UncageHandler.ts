@@ -1,6 +1,6 @@
-import { CageBot } from "../CageBot";
-import { ChatMessage } from "../utils/Typings";
-import { sendApiResponse } from "../utils/Utils";
+import { CageBot } from "../CageBot.js";
+import { ChatMessage } from "../utils/Typings.js";
+import { sendApiResponse, sendPrivateMessage } from "../utils/Utils.js";
 
 export class UncageHandler {
   private _cagebot: CageBot;
@@ -87,12 +87,11 @@ export class UncageHandler {
         if (prevStatus.apiResponses) {
           await sendApiResponse(message, "Notification", "your_clan_unbaited");
         } else {
-          await this._cagebot
-            .getClient()
-            .sendPrivateMessage(
-              prevStatus.requester,
-              `I chewed out of the Hobopolis instance in ${prevStatus.clan.name} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`
-            );
+          await sendPrivateMessage(
+            this._cagebot.getClient(),
+            prevStatus.requester,
+            `I chewed out of the Hobopolis instance in ${prevStatus.clan.name} due to recieving a release command after being left in for more than an hour. YOUR CAGE IS NOW UNBAITED.`
+          );
         }
       }
 

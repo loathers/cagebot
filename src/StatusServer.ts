@@ -1,17 +1,18 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
-import { CageBot } from "./CageBot";
-import { KoLStatus } from "./utils/Typings";
+import { CageBot } from "./CageBot.js";
+import { KoLStatus } from "./utils/Typings.js";
+import { getKoLStatus } from "./utils/Utils.js";
 
 const STATUS_CACHE_MS = 60_000;
 
 type StatusData = {
-  bot: { name: string; id: string } | null;
+  bot: { name: string; id: number } | null;
   caged: boolean;
   busy: boolean;
   rollover: boolean;
   cageTask: {
-    requester: { name: string; id: string };
-    clan: { name: string; id: string };
+    requester: { name: string; id: number };
+    clan: { name: string; id: number };
     startedAt: string;
     secondsInCage: number;
     releaseable: boolean;
@@ -29,21 +30,16 @@ export function startStatusServer(cageBot: CageBot) {
   let cachedStatus: KoLStatus | undefined;
   let cachedAt = 0;
 
-  async function getKoLStatus(): Promise<KoLStatus | undefined> {
+  async function getCachedStatus(): Promise<KoLStatus | undefined> {
     const client = cageBot.getClient();
 
-    if (
-      Date.now() - cachedAt >= STATUS_CACHE_MS &&
-      !client.isRollover() &&
-      (await client.loggedIn())
-    ) {
-      const status = await client.getStatus();
-
-      // getStatus() returns fake defaults when the request fails; only
-      // treat responses with real turn data as fresh.
-      if (status.turnsPlayed > 0) {
-        cachedStatus = status;
+    if (Date.now() - cachedAt >= STATUS_CACHE_MS && !client.isRollover()) {
+      try {
+        cachedStatus = await getKoLStatus(client);
         cachedAt = Date.now();
+      } catch (error) {
+        // Keep serving the last known status if KoL is unreachable
+        console.log(`Failed to refresh status: ${error}`);
       }
     }
 
@@ -51,8 +47,8 @@ export function startStatusServer(cageBot: CageBot) {
   }
 
   async function buildStatus(): Promise<StatusData> {
-    const status = await getKoLStatus();
-    const me = cageBot.getClient().getMe();
+    const status = await getCachedStatus();
+    const me = cageBot.getMe();
     const task = cageBot.getCageTask();
 
     return {

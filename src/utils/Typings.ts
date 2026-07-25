@@ -6,11 +6,6 @@ export type CageTask = {
   autoRelease: boolean;
 };
 
-export type ClanWhiteboard = {
-  text: string;
-  editable: boolean;
-};
-
 export type SavedSettings = {
   validAtTurn: number;
   maxDrunk: number;
@@ -42,23 +37,9 @@ export type LastClanRequest = {
   expiresAfter: number;
 };
 
-export type KOLCredentials = {
-  sessionCookies: string;
-  pwdhash: string;
-};
-
 export type KoLUser = {
   name: string;
-  id: string;
-};
-
-export type KOLMessage = {
-  who?: KoLUser;
-  type?: string;
-  msg?: string;
-  link?: string;
-  channel: string;
-  time: string;
+  id: number;
 };
 
 export type ChatMessage = {
@@ -71,20 +52,7 @@ export type ChatMessage = {
 
 export type KoLClan = {
   name: string;
-  id: string;
-};
-
-export type CombatMacro = {
-  name: string;
-  id: string;
-};
-
-export type MallResult = {
-  storeId: number;
-  itemId: number;
-  stock: number;
-  limit?: number;
-  price: number;
+  id: number;
 };
 
 export type EquipSlot =
@@ -96,7 +64,7 @@ export type EquipSlot =
   | "acc1"
   | "acc2"
   | "acc3"
-  | "fakehands"
+  | "container"
   | "cardsleeve";
 
 export type KoLStatus = {
@@ -111,7 +79,6 @@ export type KoLStatus = {
   maxMP: number;
   equipment: Map<EquipSlot, number>;
   familiar?: number;
-  meat: number;
   level: number;
   effects: KoLEffect[];
 };

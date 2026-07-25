@@ -1,8 +1,8 @@
 import * as dotenv from "dotenv";
 import { readFileSync } from "fs";
-import { CageBot } from "./CageBot";
-import { startStatusServer } from "./StatusServer";
-import { Settings } from "./utils/Typings";
+import { CageBot } from "./CageBot.js";
+import { startStatusServer } from "./StatusServer.js";
+import { Settings } from "./utils/Typings.js";
 
 const origlog = console.log;
 
@@ -87,5 +87,8 @@ if (!process.env.KOL_USER || !process.env.KOL_PASS) {
 
   const cageBot = new CageBot(process.env.KOL_USER, process.env.KOL_PASS, settings as Settings);
   startStatusServer(cageBot);
-  cageBot.start();
+  cageBot.start().catch((error) => {
+    console.log(`Cagebot failed to start: ${error}`);
+    process.exit(1);
+  });
 }

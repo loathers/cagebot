@@ -1,15 +1,19 @@
-import { CageBot } from "../CageBot";
-import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses";
-import { KoLClient } from "./KoLClient";
+import type { Client } from "kol.js";
+import type { ApiStatus } from "kol.js/domains/ApiStatus";
+import { CageBot } from "../CageBot.js";
+import { RequestStatus, RequestResponse, RequestStatusDetails } from "./JsonResponses.js";
 import {
   CageTask,
   Diet,
   ChatMessage,
   SavedSettings,
-  ClanWhiteboard,
   KoLSkill,
   BuffySkill,
-} from "./Typings";
+  KoLStatus,
+  KoLEffect,
+  KoLUser,
+  EquipSlot,
+} from "./Typings.js";
 import { readFileSync, writeFileSync } from "fs";
 import { decode, encode } from "html-entities";
 
@@ -51,6 +55,73 @@ export function splitMessage(message: string, limit: number = 245): string[] {
   messages.push(decode(encodedRemainder));
 
   return messages;
+}
+
+export async function useChatMacro(client: Client, macro: string): Promise<void> {
+  await client.chat.macro(`/clan ${macro}`);
+}
+
+export async function sendPrivateMessage(
+  client: Client,
+  recipient: KoLUser,
+  message: string
+): Promise<void> {
+  for (const msg of splitMessage(message)) {
+    await useChatMacro(client, `/w ${recipient.id} ${msg}`);
+  }
+}
+
+export async function sendHobopolisMessage(client: Client, message: string): Promise<void> {
+  for (const msg of splitMessage(message)) {
+    await useChatMacro(client, `/w Hobopolis ${msg}`);
+  }
+}
+
+export function toKoLStatus(status: ApiStatus): KoLStatus {
+  const equipment = new Map<EquipSlot, number>();
+
+  if (status.equipment) {
+    for (const [slot, itemId] of Object.entries(status.equipment)) {
+      if (itemId > 0) {
+        equipment.set(slot as EquipSlot, itemId);
+      }
+    }
+  }
+
+  const effects: KoLEffect[] = Object.values(status.effects)
+    .map(([name, duration, , , id]) => ({ name, duration, id }))
+    .filter((effect) => effect.duration > 0);
+
+  return {
+    level: status.level,
+    adventures: status.adventures,
+    drunk: status.drunk,
+    full: status.full,
+    hp: status.hp,
+    mp: status.mp,
+    maxHP: status.maxhp,
+    maxMP: status.maxmp,
+    familiar: status.familiar,
+    equipment: equipment,
+    rollover: status.rollover,
+    turnsPlayed: status.turnsplayed,
+    effects: effects,
+  };
+}
+
+export async function getKoLStatus(client: Client): Promise<KoLStatus> {
+  return toKoLStatus(await client.fetchStatus());
+}
+
+/**
+ * The bot's inventory as a map of item id to count.
+ *
+ * Always refreshes so that items sent to the bot since the last check are
+ * seen.
+ */
+export async function getInventory(client: Client): Promise<Map<number, number>> {
+  const inventory = await client.inventory.get.refresh();
+  return new Map([...inventory].map(([item, count]) => [item.id, count]));
 }
 
 export function toJson(object: any) {
@@ -113,8 +184,8 @@ export function loadSettings(): SavedSettings | undefined {
       const task = json["cageTask"];
 
       settings.cageTask = {
-        requester: task["requester"],
-        clan: task["clan"],
+        requester: { name: task["requester"]["name"], id: parseInt(task["requester"]["id"]) },
+        clan: { name: task["clan"]["name"], id: parseInt(task["clan"]["id"]) },
         started: parseInt(task["started"]),
         apiResponses: task["apiResponses"] === "true",
         autoRelease: task["autoRelease"] === "true",
@@ -131,25 +202,21 @@ export function loadSettings(): SavedSettings | undefined {
 
 export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
   if (
-    !cagebot.getClient().getUsername() ||
+    !cagebot.getClient().username ||
     !cagebot.getSettings().whiteboardMessageCaged ||
     !cagebot.getSettings().whiteboardMessageUncaged
   ) {
     return;
   }
 
-  let whiteboard: ClanWhiteboard = await cagebot.getClient().getClanWhiteboard();
-
-  if (!whiteboard) {
-    return;
-  }
+  const whiteboard = await cagebot.getClan().readWhiteboard();
 
   if (!whiteboard.editable) {
     return;
   }
 
-  const username = cagebot.getClient().getUsername() || "";
-  const userid = cagebot.getClient().getUserID() || "";
+  const username = cagebot.getClient().username;
+  const userid = cagebot.getClient().playerId;
 
   if (!username || !userid) {
     return;
@@ -186,30 +253,7 @@ export async function updateWhiteboard(cagebot: CageBot, setCaged: boolean) {
     console.log("Editing basement whiteboard to reflect that we are not in a cage.");
   }
 
-  await cagebot.getClient().setClanWhiteboard(text);
-}
-
-export async function readGratesAndValves(client: KoLClient): Promise<[number, number]> {
-  const raidlogsResponse = (await client.visitUrl("clan_raidlogs.php")) as string;
-  const regexGrates =
-    raidlogsResponse.matchAll(
-      /opened (?:a|(?:\d+)) sewer grates? (?:\d+ times )?\((\d+) turns?\)/g
-    ) || [];
-  const regexValves =
-    raidlogsResponse.matchAll(/lowered the water level (?:\d+ times )?\((\d+) turns?\)/g) || [];
-
-  let gratesOpened: number = 0;
-  let valvesTwisted: number = 0;
-
-  for (let g of regexGrates) {
-    gratesOpened += parseInt(g[1]);
-  }
-
-  for (let v of regexValves) {
-    valvesTwisted += parseInt(v[1]);
-  }
-
-  return [gratesOpened, valvesTwisted];
+  await cagebot.getClan().writeWhiteboard(text);
 }
 
 export function getManualDiet(): Diet[] {
